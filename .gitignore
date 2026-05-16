@@ -1,0 +1,70 @@
+
+adapter_latest/
+# audio
+# audio scratch
+Backend_utils/download_models.py
+Backend_utils/load_models/load_asr.py
+Backend_utils/load_models/load_tts.py
+Backend_utils/telegram_bot_streaming.py
+Backend_utils/telegram_inside_chainlit.py
+Backend_utils/TTSe/
+Backend_utils/.venv/
+# big upstream projects
+*.bin
+.cache/
+# caches
+*_checkpoint*/
+checkpoints/
+CHUNKS.jsonl
+*.ckpt
+.DS_Store
+*.env
+.env
+.env.*
+env/
+# env files
+# external projects we depend on but do not own
+*.faiss
+faiss.index
+# files with hardcoded secrets, do not push
+*_final/
+gemma_4b/
+gemma_4_lora/
+*.gguf
+.idea/
+*.index
+.ipynb_checkpoints/
+*.key
+llama.cpp/
+llm_deploy/llama.cpp/
+llm_deploy/.venv/
+meta.jsonl
+# model checkpoints and weights
+# model weights
+*.mp3
+.mypy_cache/
+*.ogg
+*.opus
+# OS / editor
+*.pt
+*.pyc
+__pycache__/
+*.pyo
+.pytest_cache/
+*.safetensors
+*secret*
+**/site-packages/
+Thumbs.db
+*.token
+*token*
+TTSe/
+uid_list.txt
+# vector databases
+# vector db
+vector_db/
+.venv/
+venv/
+# venvs
+.vscode/
+*.wav
+*.wav *.opus *.ogg *.mp3

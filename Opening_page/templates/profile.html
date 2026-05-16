@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>My Profile - MenoChat</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Quicksand&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Quicksand', sans-serif;
+    }
+  </style>
+</head>
+<body class="bg-rose-50 min-h-screen flex flex-col items-center justify-center">
+  <div class="w-full max-w-md bg-white p-8 rounded-2xl shadow-lg border border-rose-200">
+    <h2 class="text-3xl font-bold text-rose-600 text-center mb-4">🌸 My Profile</h2>
+    
+    <div id="profile" class="space-y-4 text-gray-700">
+      <div class="flex justify-between">
+        <span class="font-semibold">Username:</span>
+        <span id="username">Loading...</span>
+        <button onclick="logout()">Logout</button>
+      </div>
+      <!-- Add more profile fields if needed -->
+    </div>
+
+    <div class="mt-8 text-center">
+      <a href="/" class="text-rose-500 hover:underline">← Back to Home</a>
+    </div>
+  </div>
+
+  <script>
+    async function loadProfile() {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        alert("You must be logged in to view this page.");
+        window.location.href = "/login-page";
+        return;
+      }
+
+      try {
+        const res = await fetch("/me", {
+          headers: { "token": token }
+        });
+
+        if (!res.ok) {
+          throw new Error("Unauthorized");
+        }
+
+        const data = await res.json();
+        document.getElementById("username").textContent = data.username;
+      } catch (err) {
+        alert("Session expired or invalid. Please log in again.");
+        localStorage.removeItem("token");
+        window.location.href = "/login-page";
+      }
+    }
+
+    loadProfile();
+
+   async function logout() {
+    localStorage.removeItem("token");
+    window.location.href = "/login-page";
+  }
+  </script>
+
+
+</body>
+</html>

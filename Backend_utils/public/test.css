@@ -1,0 +1,49 @@
+
+#starters button {
+  display: block !important;
+  white-space: normal !important;
+  width: 18em !important;
+  height: auto !important; /* Let it grow with content */
+  padding: 12px 12px !important;
+  line-height: 1.4 !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  border-radius: 12px !important;
+  text-align: left !important;
+  color: #000000 !important; /* Text color */
+  background-color: #E9D8FD !important; /* Light violet */
+  border: 1px solid #C4B5FD !important;
+  word-break: break-word !important;
+  overflow-wrap: break-word !important;
+  box-sizing: border-box !important;
+  overflow: visible !important;
+  word-spacing: normal !important;
+}
+
+#starters button p {
+  white-space: normal !important;
+  word-break: break-word !important;
+  overflow-wrap: break-word !important;
+  hyphens: auto !important;
+  color: #000000 !important; /* override Tailwind muted */
+  margin: 0 !important;
+}
+
+#starters button p.truncate {
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: unset !important;
+}
+
+.dark #starters button {
+  background-color: transparent !important;
+  border: 1px solid #7C3AED !important;
+  color: #E9D8FD !important;
+}
+
+.dark #starters button p {
+  color: #FFFFFF !important;
+}
+
+
+

@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Register</title>
+
+
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: linear-gradient(to right top, #74ebd5, #acb6e5);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: fadeIn 0.8s ease-in-out;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 420px;
+      background: #ffffff;
+      padding: 35px 30px;
+      border-radius: 20px;
+      box-shadow: 0 15px 40px rgba(0, 0, 0, 0.15);
+      text-align: center;
+      transition: all 0.3s ease-in-out;
+    }
+
+    h2 {
+      margin-bottom: 16px;
+      color: #222;
+      font-weight: 600;
+    }
+
+    input {
+      width: 100%;
+      padding: 14px 16px;
+      margin: 10px 0;
+      border: 1px solid #ddd;
+      border-radius: 10px;
+      transition: 0.2s;
+      font-size: 15px;
+    }
+
+    input:focus {
+      border-color: #4ca1af;
+      outline: none;
+      box-shadow: 0 0 6px rgba(76, 161, 175, 0.3);
+    }
+
+    button {
+      width: 100%;
+      padding: 14px;
+      background: linear-gradient(to right, #4ca1af, #2c7d8c);
+      color: white;
+      font-size: 16px;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      margin-top: 14px;
+      transition: 0.3s;
+      font-weight: 600;
+    }
+
+    button:hover {
+      opacity: 0.9;
+    }
+
+    button.logout {
+      background: linear-gradient(to right, #ff4e50, #f95f4d);
+    }
+
+    .error {
+      color: red;
+      font-size: 14px;
+      margin-top: 8px;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    #welcome-icon {
+      font-size: 50px;
+      display: block;
+      margin-bottom: 10px;
+    }
+
+    p.subtitle {
+      font-size: 14px;
+      color: #666;
+      margin-bottom: 25px;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: scale(0.98); }
+      to   { opacity: 1; transform: scale(1); }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+
+    <div id="register-section">
+      <h2> Create Account</h2>
+      <p class="subtitle">Start your journey with us</p>
+      <input type="text" id="name" placeholder="👤 Your Name" />
+      <input type="email" id="email" placeholder="📧 Email Address" />
+      <input type="password" id="password" placeholder="🔒 Password" />
+      <button onclick="register()">✨ Register</button>
+      <p class="error" id="register-error"></p>
+    </div>
+
+
+    <div id="home-section" class="hidden">
+      <div id="welcome-icon">👋</div>
+      <h2>Welcome, <span id="username"></span>!</h2>
+      <p class="subtitle">You're successfully registered. Enjoy your day!</p>
+      <button class="logout" onclick="logout()">🚪 Logout</button>
+    </div>
+  </div>
+
+  <script>
+    function showHome(user) {
+      document.getElementById('username').textContent = user.name;
+      document.getElementById('register-section').classList.add('hidden');
+      document.getElementById('home-section').classList.remove('hidden');
+    }
+
+    function showRegister() {
+      document.getElementById('home-section').classList.add('hidden');
+      document.getElementById('register-section').classList.remove('hidden');
+    }
+
+    function register() {
+      const name = document.getElementById('name').value.trim();
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value.trim();
+      const errorEl = document.getElementById('register-error');
+
+      if (!name || !email || !password) {
+        errorEl.textContent = "⚠️ All fields are required!";
+        return;
+      }
+
+      const user = { name, email };
+      localStorage.setItem("user", JSON.stringify(user));
+      showHome(user);
+    }
+
+    function logout() {
+      localStorage.removeItem("user");
+      showRegister();
+    }
+
+    window.onload = () => {
+      const user = JSON.parse(localStorage.getItem("user"));
+      if (user) {
+        showHome(user);
+      }
+    };
+  </script>
+
+</body>
+</html>

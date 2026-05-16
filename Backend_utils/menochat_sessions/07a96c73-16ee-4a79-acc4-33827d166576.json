@@ -1,0 +1,60 @@
+{
+  "session_id": "07a96c73-16ee-4a79-acc4-33827d166576",
+  "created_at": "2026-05-13T15:08:44Z",
+  "history": [
+    {
+      "role": "user",
+      "content": "আমার পিরিয়ড অনিয়মিত হয়েছে। এটা কি স্বাভাবিক, নাকি ডাক্তারের কাছে যাওয়া দরকার?",
+      "ts": "2026-05-13T15:08:44Z"
+    },
+    {
+      "role": "assistant",
+      "content": "পিরিয়ড অনিয়মিত হওয়াটা অনেক সময়ই স্বাভাবিক হতে পারে, তাই খুব বেশি চিন্তিত হওয়ার কিছু নেই। মাসিকের চক্রে কিছুটা পরিবর্তন আসা বা কখনো কখনো দেরিতে হওয়া বা আগে হওয়া খুবই সাধারণ ব্যাপার। তবে কিছু ক্ষেত্রে ডাক্তারের পরামর্শ নেওয়া জরুরি। যদি আপনার মাসিক হঠাৎ করে বন্ধ হয়ে যায় এবং গর্ভবতী না হন, অথবা নিয়মিত হলেও এখন অনিয়মিত হচ্ছে, তাহলে অবশ্যই চিকিৎসকের সাথে কথা বলা উচিত। এছাড়া, যদি রক্তপাত সাত দিনের বেশি স্থায়ী হয়, অতিরিক্ত পরিমাণে রক্তপাত হয় বা ঘন ঘন প্যাড বা ট্যাম্পন পরিবর্তন করতে হয়, মাসিকের মাঝেও রক্তপাত হয়, তীব্র ব্যথা হয়, জ্বর আসে বা বমি বমি লাগে, তাহলেও দেরি না করে ডাক্তারের কাছে যাওয়া ভালো। আপনার মাসিক চক্রের একটি হিসাব রাখলে চিকিৎসক কারণ খুঁজে বের করতে সুবিধা পাবেন এবং সঠিক পরামর্শ দিতে পারবেন।\n\n📚 সূত্র:\n1. [msmedicine.com: Hormones Asthma Allergies Women](https://www.msmedicine.com/blog/hormones-asthma-allergies-women)\n2. [Mayo Clinic: Art 20047186](https://www.mayoclinic.org/healthy-lifestyle/womens-health/in-depth/menstrual-cycle/art-20047186)\n3. [Cleveland Clinic: 14633 Abnormal Menstruation Periods](https://my.clevelandclinic.org/health/diseases/14633-abnormal-menstruation-periods)\n4. [Healthline: Why Is My Period Late](https://www.healthline.com/health/womens-health/why-is-my-period-late)",
+      "ts": "2026-05-13T15:08:54Z"
+    }
+  ],
+  "thread_state": {
+    "active_topic": "পিরিয়ড অনিয়মিততা",
+    "symptom_cluster": [],
+    "risk_level": "routine",
+    "emotion_flag": false,
+    "last_resolved_question": "আপনার পিরিয়ড কতদিন পর পর হয় এবং কেমন রক্তপাত হয়?",
+    "last_retrieval_query": "পিরিয়ডের অনিয়মিত হওয়ার সাধারণ কারণ ও কখন ডাক্তারের কাছে যাওয়া উচিত",
+    "last_route": "health_direct"
+  },
+  "controller_last_decision": {
+    "route": "health_direct",
+    "risk_level": "routine",
+    "depends_on_history": false,
+    "needs_retrieval": true,
+    "resolved_question": "আপনার পিরিয়ড কতদিন পর পর হয় এবং কেমন রক্তপাত হয়?",
+    "retrieval_query": "পিরিয়ডের অনিয়মিত হওয়ার সাধারণ কারণ ও কখন ডাক্তারের কাছে যাওয়া উচিত",
+    "answer_goal": "অনিয়মিত মাসিকের সম্ভাব্য কারণগুলো সম্পর্কে তথ্য প্রদান করা এবং কখন চিকিৎসকের পরামর্শ নেওয়া জরুরি, সে বিষয়ে নির্দেশনা দেওয়া।",
+    "thread_state_patch": {
+      "active_topic": "পিরিয়ড অনিয়মিততা",
+      "risk_level": "routine",
+      "last_resolved_question": "আপনার পিরিয়ড কতদিন পর পর হয় এবং কেমন রক্তপাত হয়?",
+      "last_retrieval_query": "পিরিয়ডের অনিয়মিত হওয়ার সাধারণ কারণ ও কখন ডাক্তারের কাছে যাওয়া উচিত",
+      "last_route": "health_direct"
+    },
+    "_retrieval_debug": {
+      "reason": "retrieval_ran",
+      "llm_multiquery_output": {
+        "queries": [
+          "পিরিয়ড অনিয়মিত হওয়া স্বাভাবিক কিনা এবং কখন ডাক্তারের কাছে যাওয়া উচিত?",
+          "অনিয়মিত মাসিক হলে কী করা উচিত? (What to do for irregular periods?)",
+          "মাসিক অনিয়মিত হওয়ার কারণ ও সমাধান সম্পর্কে তথ্য।"
+        ]
+      },
+      "query_variants": [
+        "পিরিয়ড অনিয়মিত হওয়া স্বাভাবিক কিনা এবং কখন ডাক্তারের কাছে যাওয়া উচিত?",
+        "অনিয়মিত মাসিক হলে কী করা উচিত? (What to do for irregular periods?)",
+        "মাসিক অনিয়মিত হওয়ার কারণ ও সমাধান সম্পর্কে তথ্য।",
+        "আমার পিরিয়ড অনিয়মিত হয়েছে। এটা কি স্বাভাবিক, নাকি ডাক্তারের কাছে যাওয়া দরকার?"
+      ],
+      "merged_count": 56,
+      "final_context_count": 4,
+      "top_rerank_score": 0.4382441830146781
+    }
+  }
+}

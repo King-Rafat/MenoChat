@@ -1,0 +1,3 @@
+First install the dependencies using: `uv sync`
+then change the `LLM_URL=https://e6fes7dp7k1tis-8000.proxy.runpod.net/` from the `deploy.env` file, to your deployed llm's link.  example for localhost: `LLM_URL=http://127.0.0.1:8000`.
+finally activate the env using: `source .venv/bin/activate` for linux. For windows `.venv\Scripts\activate` and run the backend using `uvicorn database:app --host 0.0.0.0 --port 8002`

@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Register</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Quicksand&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Quicksand', sans-serif;
+    }
+  </style>
+</head>
+<body class="bg-rose-50 flex items-center justify-center min-h-screen">
+  <div class="bg-white p-8 rounded-xl shadow-lg w-full max-w-md border border-rose-200">
+    <h2 class="text-3xl font-bold mb-6 text-center text-rose-500">
+      🌸 Create Your Account
+    </h2>
+    <form id="registerForm" class="space-y-4">
+      <div>
+        <label for="username" class="block text-sm font-medium text-rose-600">Username</label>
+        <input type="text" id="username" name="username" required class="mt-1 block w-full px-4 py-2 border border-rose-300 rounded-md focus:ring-2 focus:ring-rose-300 focus:outline-none">
+      </div>
+      <div>
+        <label for="password" class="block text-sm font-medium text-rose-600">Password</label>
+        <input type="password" id="password" name="password" required class="mt-1 block w-full px-4 py-2 border border-rose-300 rounded-md focus:ring-2 focus:ring-rose-300 focus:outline-none">
+      </div>
+      <button type="submit" class="w-full bg-rose-500 text-white py-2 rounded-md hover:bg-rose-600 transition duration-300">Register</button>
+    </form>
+
+    <div id="message" class="mt-4 text-center text-sm font-medium"></div>
+  </div>
+
+  <script>
+  const form = document.getElementById("registerForm");
+  const messageDiv = document.getElementById("message");
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const username = form.username.value;
+    const password = form.password.value;
+
+    const response = await fetch("/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password })
+    });
+
+    const result = await response.json();
+    if (response.ok) {
+      localStorage.setItem("registered", "1");
+      messageDiv.textContent = "✅ Registration successful! You have been added to the system. Redirecting...";
+      messageDiv.className = "text-green-600 mt-4 text-center text-sm font-medium";
+      setTimeout(() => {
+        window.location.href = "https://rech2fx4qtbivc-8002.proxy.runpod.net/";
+      }, 2000);
+    } else {
+      messageDiv.textContent = `❌ ${result.detail || 'Registration failed'}`;
+      messageDiv.className = "text-red-600 mt-4 text-center text-sm font-medium";
+    }
+  });
+</script>
+
+</body>
+</html>

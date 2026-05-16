@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+
+  <meta charset="UTF-8" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+
+  <title>Create Destroy Landing</title>
+
+  <link rel="stylesheet" href="styles.css" />
+
+</head>
+
+<body>
+
+  <div class="hero">
+
+    <div class="overlay"></div>
+
+
+    <nav class="navbar">
+
+      <div class="logo">🛡</div>
+
+      <div class="nav-links">
+
+        <a href="#">Work</a>
+
+        <a href="#">About</a>
+
+        <a href="#">Careers</a>
+
+        <a href="#">Contact</a>
+
+      </div>
+
+    </nav>
+
+
+    <div class="main-text">
+
+      <h1><span class="create">Create</span> <span class="destroy">Destroy</span></h1>
+
+      <p class="tagline">The Brigade is a digital agency. We create moments for people that forge indelible bonds with our clients.</p>
+
+      <div class="bottom-box">
+
+        <div class="box-left">
+
+          <p class="vertical-text">FEMME<br>AND<br>FUNCTION</p>
+
+        </div>
+
+        <div class="box-right">
+
+          <p class="event-title">Brigade’s Femme & Function event raises funds for GirlsInc</p>
+
+          <a href="#" class="cta">ART, AUCTION & PANEL ON WOMEN IN STEAM &rarr;</a>
+
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+</body>
+
+<style>
+
+/* Base Reset */
+
+* {
+
+  margin: 0;
+
+  padding: 0;
+
+  box-sizing: border-box;
+
+}
+
+body, html {
+
+  height: 100%;
+
+  font-family: 'Georgia', serif;
+
+  color: white;
+
+}
+
+
+/* Background Image and Overlay */
+
+.hero {
+
+  position: relative;
+
+  height: 100vh;
+
+  background: url('https://images.unsplash.com/photo-1506744038136-46273834b3fb?ixlib=rb-4.0.3&auto=format&fit=crop&w=1950&q=80') center/cover no-repeat;
+
+  display: flex;
+
+  flex-direction: column;
+
+  justify-content: space-between;
+
+  padding: 3rem;
+
+  overflow: hidden;
+
+}
+
+.overlay {
+
+  position: absolute;
+
+  top: 0; left: 0;
+
+  width: 100%; height: 100%;
+
+  background: rgba(24, 15, 32, 0.7);
+
+  z-index: 1;
+
+}
+
+
+/* Navigation */
+
+.navbar {
+
+  position: relative;
+
+  z-index: 2;
+
+  display: flex;
+
+  justify-content: space-between;
+
+  align-items: center;
+
+}
+
+.logo {
+
+  font-size: 1.8rem;
+
+}
+
+.nav-links a {
+
+  margin-left: 2rem;
+
+  color: white;
+
+  text-decoration: none;
+
+  font-weight: 500;
+
+  font-size: 1rem;
+
+}
+
+
+/* Main Title */
+
+.main-text {
+
+  position: relative;
+
+  z-index: 2;
+
+  margin-top: auto;
+
+}
+
+.main-text h1 {
+
+  font-size: 4rem;
+
+  font-weight: 500;
+
+  position: relative;
+
+}
+
+.create {
+
+  position: relative;
+
+}
+
+.destroy {
+
+  position: relative;
+
+  margin-left: 1rem;
+
+  display: inline-block;
+
+  border-left: 2px solid white;
+
+  padding-left: 1rem;
+
+}
+
+.tagline {
+
+  margin-top: 1.5rem;
+
+  max-width: 500px;
+
+  font-size: 1.1rem;
+
+  line-height: 1.5;
+
+  color: #ddd;
+
+}
+
+
+/* Bottom Box */
+
+.bottom-box {
+
+  display: flex;
+
+  align-items: flex-start;
+
+  justify-content: space-between;
+
+  margin-top: 3rem;
+
+  flex-wrap: wrap;
+
+}
+
+.box-left {
+
+  flex: 1;
+
+  max-width: 200px;
+
+}
+
+.vertical-text {
+
+  writing-mode: vertical-rl;
+
+  text-orientation: mixed;
+
+  letter-spacing: 0.2rem;
+
+  font-size: 1rem;
+
+}
+
+.box-right {
+
+  flex: 2;
+
+  max-width: 500px;
+
+}
+
+.event-title {
+
+  font-weight: 500;
+
+  margin-bottom: 0.5rem;
+
+}
+
+.cta {
+
+  color: #fff;
+
+  text-decoration: underline;
+
+  font-size: 0.9rem;
+
+}
+
+
+/* Diagonal Divider */
+
+.main-text::before {
+
+  content: '';
+
+  position: absolute;
+
+  top: -20%;
+
+  left: 50%;
+
+  width: 2px;
+
+  height: 150%;
+
+  background: white;
+
+  transform: rotate(45deg);
+
+  z-index: -1;
+
+  opacity: 0.4;
+
+}
+
+
+</style>
+
+</html>

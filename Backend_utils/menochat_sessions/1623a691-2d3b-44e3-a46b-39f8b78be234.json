@@ -1,0 +1,52 @@
+{
+  "session_id": "1623a691-2d3b-44e3-a46b-39f8b78be234",
+  "created_at": "2026-05-12T13:52:24Z",
+  "history": [
+    {
+      "role": "user",
+      "content": "আমার পিরিয়ড অনিয়মিত হয়েছে। এটা কি স্বাভাবিক, নাকি ডাক্তারের কাছে যাওয়া দরকার?",
+      "ts": "2026-05-12T13:52:24Z"
+    },
+    {
+      "role": "assistant",
+      "content": "পিরিয়ড অনিয়মিত হওয়াটা সাধারণত স্বাভাবিক নয় এবং এর কারণ খুঁজে বের করার জন্য অবশ্যই একজন ডাক্তারের পরামর্শ নেওয়া উচিত। আপনার মাসিক চক্রে কোনো পরিবর্তন এলে বা এটি নিয়মিত না হলে, বিশেষ করে যদি আপনি গর্ভবতী হওয়ার সম্ভাবনা থাকে বা অন্য কোনো শারীরিক অস্বস্তি অনুভব করেন, তবে দ্রুত চিকিৎসকের সাথে কথা বলা জরুরি। অনেক সময় কিছু সাধারণ কারণে পিরিয়ড অনিয়মিত হতে পারে, যেমন – গর্ভাবস্থা বা বুকের দুধ খাওয়ানোর পর মাসিক বন্ধ হয়ে যাওয়া; অতিরিক্ত ওজন কমানো বা খুব বেশি ব্যায়াম করা এবং খাদ্যাভ্যাস পরিবর্তন করে এমন সমস্যা দেখা দিতে পারে। এছাড়া পলিসিস্টিক ওভারি সিন্ড্রোম (PCOS), প্রিম্যাচিউর ওভ অ্যারিয়ান ফ",
+      "ts": "2026-05-12T13:53:26Z"
+    }
+  ],
+  "thread_state": {
+    "active_topic": "Irregular Periods",
+    "symptom_cluster": [],
+    "risk_level": "elevated",
+    "emotion_flag": false,
+    "last_resolved_question": "পিরিয়ড অনিয়মিত হওয়ার সম্ভাব্য কারণ কী?",
+    "last_retrieval_query": "irregular periods causes and when to see a doctor",
+    "last_route": "health_direct"
+  },
+  "controller_last_decision": {
+    "route": "health_direct",
+    "risk_level": "elevated",
+    "depends_on_history": false,
+    "needs_retrieval": true,
+    "resolved_question": "পিরিয়ড অনিয়মিত হওয়ার সম্ভাব্য কারণ কী?",
+    "retrieval_query": "irregular periods causes and when to see a doctor",
+    "answer_goal": "explain possible causes of irregular periods and when they require medical consultation",
+    "thread_state_patch": {
+      "active_topic": "Irregular Periods",
+      "risk_level": "elevated",
+      "last_resolved_question": "পিরিয়ড অনিয়মিত হওয়ার সম্ভাব্য কারণ কী?",
+      "last_retrieval_query": "irregular periods causes and when to see a doctor",
+      "last_route": "health_direct"
+    },
+    "_retrieval_debug": {
+      "reason": "retrieval_ran",
+      "llm_multiquery_output": {},
+      "query_variants": [
+        "আমার পিরিয়ড অনিয়মিত হয়েছে। এটা কি স্বাভাবিক, নাকি ডাক্তারের কাছে যাওয়া দরকার?",
+        "পিরিয়ড অনিয়মিত হওয়ার সম্ভাব্য কারণ কী?"
+      ],
+      "merged_count": 36,
+      "final_context_count": 2,
+      "top_rerank_score": 0.23167213797569275
+    }
+  }
+}

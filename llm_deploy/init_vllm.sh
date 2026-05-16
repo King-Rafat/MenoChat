@@ -1,0 +1,1 @@
+uv venv --python 3.12 --seed --managed-python --clear && source .venv/bin/activate && uv pip install vllm --torch-backend=auto

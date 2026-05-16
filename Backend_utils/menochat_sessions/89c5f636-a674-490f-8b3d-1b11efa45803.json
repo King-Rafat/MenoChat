@@ -1,0 +1,52 @@
+{
+  "session_id": "89c5f636-a674-490f-8b3d-1b11efa45803",
+  "created_at": "2026-05-12T13:55:57Z",
+  "history": [
+    {
+      "role": "user",
+      "content": "পিরিয়ডের সময় আমার অনেক পেটব্যথা হয়। এটা কীভাবে কমানো যায়?",
+      "ts": "2026-05-12T13:55:57Z"
+    },
+    {
+      "role": "assistant",
+      "content": "পিরিয়ডের সময় পেটে ব্যথা বা ক্র্যাম্প হওয়াটা অনেক নারীর জন্যই একটি সাধারণ সমস্যা, আপু। এই অস্বস্তি কমানোর জন্য কিছু ঘরোয়া উপায় এবং জীবনযাত্রার পরিবর্তন বেশ কার্যকর হতে পারে। প্রথমে আপনি যা করতে পারেন তার কথা বলছি:\n\nপেটের ব্যথার উপশমের জন্য সবচেয়ে সহজলভ্য ও দ্রুত আরাম পেতে গরম সেঁক বা উষ্ণ স্নান নিতে পারেন। একটি হট ওয়াটার ব্যাগ বা গরম জলের বোতল তোয়ালে দিয়ে মুড়ে পেটে বা পিঠের নিচের দিকে রাখলে ব্যথা অনেকটাই কমে আসে। এছাড়াও, তলপেট এবং কোমরের অংশে হালকা হাতে মালিশ করলে পেশি শিথিল হয় এবং ব্যথা কমে। হাঁটাচলা বা যোগা-এর মতো হালকা ব্যায়ামও এই সময় আরাম দিতে পারে, কারণ এতে শরীরের রক্ত ​​সঞ্চালন বাড়ে",
+      "ts": "2026-05-12T13:56:58Z"
+    }
+  ],
+  "thread_state": {
+    "active_topic": "menstrual pain management",
+    "symptom_cluster": [],
+    "risk_level": "routine",
+    "emotion_flag": false,
+    "last_resolved_question": "পিরিয়ডের ব্যথা কমানোর জন্য কী কী ঘরোয়া উপায় বা চিকিৎসা আছে?",
+    "last_retrieval_query": "পিরিয়ডের ব্যথা কমানোর উপায়",
+    "last_route": "health_direct"
+  },
+  "controller_last_decision": {
+    "route": "health_direct",
+    "risk_level": "routine",
+    "depends_on_history": false,
+    "needs_retrieval": true,
+    "resolved_question": "পিরিয়ডের ব্যথা কমানোর জন্য কী কী ঘরোয়া উপায় বা চিকিৎসা আছে?",
+    "retrieval_query": "পিরিয়ডের ব্যথা কমানোর উপায়",
+    "answer_goal": "give action-first practical guidance on managing menstrual cramps",
+    "thread_state_patch": {
+      "active_topic": "menstrual pain management",
+      "risk_level": "routine",
+      "last_resolved_question": "পিরিয়ডের ব্যথা কমানোর জন্য কী কী ঘরোয়া উপায় বা চিকিৎসা আছে?",
+      "last_retrieval_query": "পিরিয়ডের ব্যথা কমানোর উপায়",
+      "last_route": "health_direct"
+    },
+    "_retrieval_debug": {
+      "reason": "retrieval_ran",
+      "llm_multiquery_output": {},
+      "query_variants": [
+        "পিরিয়ডের সময় আমার অনেক পেটব্যথা হয়। এটা কীভাবে কমানো যায়?",
+        "পিরিয়ডের ব্যথা কমানোর জন্য কী কী ঘরোয়া উপায় বা চিকিৎসা আছে?"
+      ],
+      "merged_count": 38,
+      "final_context_count": 5,
+      "top_rerank_score": 0.8979628086090088
+    }
+  }
+}

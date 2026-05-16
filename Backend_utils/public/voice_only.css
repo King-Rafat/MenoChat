@@ -1,0 +1,102 @@
+/* ==========================================================================
+   VOICE-ONLY MODE
+   --------------------------------------------------------------------------
+   Hides Chainlit's text input area and turns the built-in mic button into
+   one large round push-to-talk button. The selectors below cover several
+   Chainlit versions, so most of them will silently no-op and one or two
+   will hit. If your version uses different class names, open devtools,
+   inspect the input bar, and tweak the selectors.
+   ========================================================================== */
+
+/* ------- 1. Hide the typing area entirely ------- */
+#chat-input,
+[data-testid="chat-input"],
+[class*="ChatInput"] textarea,
+[class*="ChatInput"] [contenteditable="true"],
+form [class*="MuiInputBase"] textarea,
+[class*="input-bar"] textarea,
+[class*="InputArea"] textarea,
+.cl-textarea,
+.cl-input {
+    display: none !important;
+}
+
+/* ------- 2. Hide the send / upload / attach buttons ------- */
+button[aria-label*="Send" i],
+button[aria-label*="Upload" i],
+button[aria-label*="Attach" i],
+[data-testid="send-button"],
+[data-testid="upload-button"],
+[data-testid="attach-button"] {
+    display: none !important;
+}
+
+/* ------- 3. Make the mic button HUGE and centered ------- */
+button[aria-label*="Microphone" i],
+button[aria-label*="microphone" i],
+button[aria-label*="record" i],
+button[aria-label*="Stop" i],
+[data-testid="record-button"],
+[data-testid="mic-button"] {
+    width: 180px !important;
+    height: 180px !important;
+    min-width: 180px !important;
+    min-height: 180px !important;
+    border-radius: 50% !important;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6) !important;
+    color: #ffffff !important;
+    box-shadow: 0 12px 32px rgba(99, 102, 241, 0.45) !important;
+    margin: 32px auto !important;
+    border: 4px solid rgba(255, 255, 255, 0.18) !important;
+    transition: transform 0.2s ease, box-shadow 0.2s ease !important;
+    cursor: pointer !important;
+}
+
+button[aria-label*="Microphone" i] svg,
+button[aria-label*="microphone" i] svg,
+button[aria-label*="record" i] svg,
+button[aria-label*="Stop" i] svg,
+[data-testid="record-button"] svg,
+[data-testid="mic-button"] svg {
+    width: 72px !important;
+    height: 72px !important;
+    color: #ffffff !important;
+}
+
+button[aria-label*="Microphone" i]:hover,
+button[aria-label*="microphone" i]:hover,
+button[aria-label*="record" i]:hover {
+    transform: scale(1.04) !important;
+    box-shadow: 0 16px 40px rgba(99, 102, 241, 0.65) !important;
+}
+
+/* ------- 4. Pulsing red glow while recording ------- */
+button[aria-label*="Stop" i],
+button[data-recording="true"],
+button.is-recording {
+    background: linear-gradient(135deg, #ef4444, #f97316) !important;
+    animation: voice-pulse 1.4s ease-in-out infinite !important;
+}
+
+@keyframes voice-pulse {
+    0%, 100% {
+        box-shadow: 0 12px 32px rgba(239, 68, 68, 0.45);
+        transform: scale(1);
+    }
+    50% {
+        box-shadow: 0 16px 48px rgba(239, 68, 68, 0.85);
+        transform: scale(1.05);
+    }
+}
+
+/* ------- 5. Center the bottom row so the button feels balanced ------- */
+[class*="input-row"],
+[class*="InputContainer"],
+form[class*="chat"],
+[class*="ChatInputBar"] {
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    padding: 24px 0 !important;
+    gap: 0 !important;
+}

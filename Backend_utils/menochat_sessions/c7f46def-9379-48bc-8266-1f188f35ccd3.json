@@ -1,0 +1,60 @@
+{
+  "session_id": "c7f46def-9379-48bc-8266-1f188f35ccd3",
+  "created_at": "2026-05-13T14:58:15Z",
+  "history": [
+    {
+      "role": "user",
+      "content": "পিরিয়ডের সময় আমার অনেক পেটব্যথা হয়। এটা কীভাবে কমানো যায়?",
+      "ts": "2026-05-13T14:58:15Z"
+    },
+    {
+      "role": "assistant",
+      "content": "পিরিয়ডের ব্যথা কমানোর জন্য কিছু ঘরোয়া উপায় এবং কখন ডাক্তারের পরামর্শ নেবেন সে সম্পর্কে কিছু তথ্য নিচে দেওয়া হলো। ব্যথার জন্য গরম সেঁক দিতে পারেন, যেমন পেটে গরম জলের বোতল বা প্যাড ব্যবহার করতে পারেন; এটি আরাম দিতে পারে। হালকা হাতে পেটের ওপর মালিশ করলেও কিছুটা স্বস্তি মিলতে পারে। পর্যাপ্ত বিশ্রাম নেওয়াও এই সময়ে শরীরকে শান্ত রাখতে সাহায্য করে। যদি ব্যথা খুব বেশি হয় এবং দৈনন্দিন কাজকর্মে ব্যাঘাত ঘটায়, তাহলে ডাক্তারের পরামর্শে সাধারণ ব্যথানাশক ঔষধ সেবনের কথা ভাবতে পারেন। কিছু ক্ষেত্রে গরম জলে স্নান করলেও আরাম পাওয়া যায়। তবে, যদি আপনার ব্যথা এতটাই তীব্র হয় যে ঘরোয়া উপায়ে বা সাধারণ ব্যথানাশকে কোনো কাজ না হয়, অথবা যদি ব্যথার সাথে অস্বাভাবিক রক্তপাত, জ্বর, বমি বমি ভাব বা অন্য কোনো নতুন উপসর্গ দেখা দেয়, তাহলে দেরি না করে একজন ডাক্তারের সাথে কথা বলা উচিত। তিনি আপনার জন্য সঠিক পরামর্শ দিতে পারবেন।\n\n📚 সূত্র:\n1. [Healthline: How To Get Rid Of Cramps](https://www.healthline.com/health/womens-health/how-to-get-rid-of-cramps)\n2. [Loma Linda Health News: How Menstrual Cycle Impacts Mental Health](https://news.llu.edu/health-wellness/how-menstrual-cycle-impacts-mental-health)\n3. [NIMH: Anxiety Disorders](https://www.nimh.nih.gov/health/topics/anxiety-disorders)",
+      "ts": "2026-05-13T14:58:25Z"
+    }
+  ],
+  "thread_state": {
+    "active_topic": "মাসিকের ব্যথা ব্যবস্থাপনা",
+    "symptom_cluster": [],
+    "risk_level": "routine",
+    "emotion_flag": false,
+    "last_resolved_question": "পিরিয়ডের ব্যথা কমানোর জন্য আপনি কী ধরনের ব্যথানাশক ঔষধ খাচ্ছেন এবং কতটুকু খাচ্ছেন?",
+    "last_retrieval_query": "পিরিয়ডের ব্যথা কমানোর উপায়",
+    "last_route": "health_direct"
+  },
+  "controller_last_decision": {
+    "route": "health_direct",
+    "risk_level": "routine",
+    "depends_on_history": false,
+    "needs_retrieval": true,
+    "resolved_question": "পিরিয়ডের ব্যথা কমানোর জন্য আপনি কী ধরনের ব্যথানাশক ঔষধ খাচ্ছেন এবং কতটুকু খাচ্ছেন?",
+    "retrieval_query": "পিরিয়ডের ব্যথা কমানোর উপায়",
+    "answer_goal": "ব্যথা উপশমের জন্য সাধারণ ঘরোয়া পদ্ধতি এবং কখন ডাক্তারের কাছে যাওয়া উচিত, সে সম্পর্কে তথ্য প্রদান করা।",
+    "thread_state_patch": {
+      "active_topic": "মাসিকের ব্যথা ব্যবস্থাপনা",
+      "risk_level": "routine",
+      "last_resolved_question": "পিরিয়ডের ব্যথা কমানোর জন্য আপনি কী ধরনের ব্যথানাশক ঔষধ খাচ্ছেন এবং কতটুকু খাচ্ছেন?",
+      "last_retrieval_query": "পিরিয়ডের ব্যথা কমানোর উপায়",
+      "last_route": "health_direct"
+    },
+    "_retrieval_debug": {
+      "reason": "retrieval_ran",
+      "llm_multiquery_output": {
+        "queries": [
+          "মাসিকের সময় পেটে ব্যথা কমানোর উপায় কী?",
+          "পিরিয়ডের ব্যথার জন্য ঘরোয়া যত্নের উপায়",
+          "পেটে ব্যথা কমানোর সাধারণ পরামর্শ (Bengali)"
+        ]
+      },
+      "query_variants": [
+        "মাসিকের সময় পেটে ব্যথা কমানোর উপায় কী?",
+        "পিরিয়ডের ব্যথার জন্য ঘরোয়া যত্নের উপায়",
+        "পেটে ব্যথা কমানোর সাধারণ পরামর্শ (Bengali)",
+        "পিরিয়ডের সময় আমার অনেক পেটব্যথা হয়। এটা কীভাবে কমানো যায়?"
+      ],
+      "merged_count": 66,
+      "final_context_count": 5,
+      "top_rerank_score": 0.3604890440845792
+    }
+  }
+}
