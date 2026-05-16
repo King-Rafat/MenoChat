@@ -11,23 +11,58 @@ MenoChat is a private, Bangla-language voice assistant for menstrual and menopau
 
 Fine-tuned **Whisper-small (240M)** for Bangla women's health speech.
 
+- Model Checkpoint: https://huggingface.co/Apurba-NSU-RnD-Lab/MenoChat_Whisper_Small
+- Medical Adapter: https://huggingface.co/RafatK/Whisper_good_adapt
+- **Full Model Training** -> Noise augmentation (fans, traffic, TV chatter, white noise etc) and SpecAugment for robustness (MUSAN + Audiomentations + ESC 50) on 3200 hrs of Audio (Common Voice, OpenSLR, MADASR, KathBath, Shrutilipi)
+- **Adapter** -> Noise augmentation + Bangla medical vocab in fine-tune of adapter data
 - Flash Attention for fast inference on one GPU
-- Noise augmentation (fans, traffic, TV chatter) and SpecAugment for robustness
-- Bangla medical vocab in fine-tune data
 - Audio path: Telegram OGG/Opus → ffmpeg 16k mono WAV → denoise → Whisper
 
-**User scores (n=12, Likert 1–5):** catches medical terms **4.42**, handles noisy speech **4.00**, fast / realtime **4.50**.
+**User scores (n=12, Likert 1–5):** catches medical terms **4.42**, handles noisy speech **4.00**, fast **4.50**. Users tested on real semi-noisy scenarios
 
 ## Gemma 4 (the brain)
 
-**Gemma 4 E4B** with LoRA fine-tune on 5,187 Bangla women's health conversations. Wrapped in a 4-call pipeline:
+Gemma 4 E2B with LoRA fine-tune on 5,187 Bangla women's health conversations.
+The model is wrapped in a 4-stage pipeline (see `llm_utils.py`):
 
-1. **Planner.** Gemma native function calling picks one of: `route_smalltalk`, `route_out_of_scope`, `answer_health_question`, `escalate_red_flag`, `provide_emotional_support`.
-2. **Retrieval.** Multi-query rewrite → FAISS + BGE-M3 embeddings + BGE reranker.
-3. **Responder.** Grounded Bangla reply, no drug names or dosages.
-4. **Safety pass.** Comorbidity and food-disease check against the user's known conditions.
+**Stage 1 (Planner) + Stage 2 (Multi-query) — fired in parallel**
 
-Adapter: `Apurba-NSU-RnD-Lab/MenoChat_gemma3_4b_finetuned`. Merged target: `RafatK/menochat-gemma3_4b-merged`. Served on vLLM with LoRA hot-loading.
+| Planner output | Allowed values |
+| --- | --- |
+| `route` | `out_of_scope`, `smalltalk`, `health_direct`, `health_followup`, `health_education`, `sensitive_supportive`, `urgent_redflag` |
+| `risk_level` | `none`, `routine`, `elevated`, `urgent` |
+| `needs_retrieval` | bool, forced true for in-scope health routes |
+| `resolved_question` | one clean Bangla question, ≤200 chars |
+| `thread_state_patch` | updates `active_topic`, `symptom_cluster`, `risk_level`, `emotion_flag`, `last_resolved_question`, `last_retrieval_query`, `last_route` |
+
+Multi-query asks Gemma for 2 to 4 retrieval queries (mix of Bangla + English paraphrases). This solves noisy ASR queries and also enables more and better retrieval.
+
+**Stage 3 (Retrieval) — cheap, parallel, single rerank**
+
+1. FAISS search in parallel for each query (top-20 each)
+2. Merge with a prefetch FAISS hit on the raw user message
+3. ONE rerank pass over the deduped union (BGE reranker, score floor 0.15)
+4. Build up to 5 clean context blocks, each ≤1400 chars, sentence-trimmed
+5. Junk filter strips `newsletter`, `cookie`, `subscribe`, `click here`, etc.
+6. Sources get human labels (`UNFPA: Menstrual Health`, `WHO: ...`) from a doctor verified website map
+
+**Stage 4 (Responder) — grounded Bangla reply**
+
+- Bangla only
+- No drug names, no dosages
+- Cite sources by friendly label
+- Refer to a doctor when risk is `elevated` or `urgent`
+
+**Stage 5 (Safety pass)**
+
+Comorbidity + food-disease check from `comorbidity.py`. A Bangla food-word regex pre-filter skips this call when the answer contains no food signal, saving 1 to 2 seconds on most turns.
+
+**Session memory.** Each session is a JSON file in `menochat_sessions/`.
+History capped at 3 turns (6 entries), assistant replies clipped to 200 chars
+on recall. Thread state survives across turns so follow-ups work.
+
+**GGUF_models_E2B for inference:** [`Gemma_E2B_GGUF`](https://huggingface.co/afifaimran/afi-gemma4-e2b-merged-gguf)
+**End-to-end latency:** ~4 to 5 seconds per turn on a single GPU 5070 laptop
 
 **User scores (n=12, Likert 1–5):**
 
@@ -45,28 +80,11 @@ Adapter: `Apurba-NSU-RnD-Lab/MenoChat_gemma3_4b_finetuned`. Merged target: `Rafa
 
 Custom **Bangladeshi VITS**, fine-tuned on Bangladeshi voice data. One-shot (non-autoregressive) for low-latency synthesis. Output is re-encoded to OGG/Opus so Telegram plays it as a real voice note.
 
-**User scores (n=12, Likert 1–5):** speaks words accurately **2.83**, empathetic **2.83**, fast / realtime **3.25**. Current bottleneck of the system, top fix on the roadmap.
+TTS system has not been evaluated
 
 ## Training Script
 
-[`Gemma4_E4B_Menochat.ipynb`](./Gemma4_E4B_Menochat.ipynb), built on Unsloth's Gemma 4 E4B template, adapted to the Menochat JSONL dataset.
-
-```python
-from unsloth import FastModel
-
-model, tokenizer = FastModel.from_pretrained(
-    "unsloth/gemma-4-E2B-it",
-    max_seq_length = 2048,
-    load_in_4bit   = True,        # QLoRA
-)
-
-model = FastModel.get_peft_model(
-    model,
-    finetune_vision_layers   = False,    # text decoder only
-    finetune_language_layers = True,
-    r = 16, lora_alpha = 32, lora_dropout = 0.05,
-)
-```
+[`Gemma4_E2B_Menochat.ipynb`](./Gemma4_E2B_Menochat.ipynb), built on Unsloth's Gemma 4 E2B template, adapted to the Menochat JSONL dataset.
 
 | Setting | Value |
 | --- | --- |
@@ -77,12 +95,14 @@ model = FastModel.get_peft_model(
 | Precision | bf16, adamw_8bit, gradient checkpointing |
 | Loss masking | `train_on_responses_only` (model loss only) |
 | Best-checkpoint | `load_best_model_at_end=True` on `eval_loss` |
+Train Dataset: 
+Validation Dataset: 
 
-Outputs: LoRA adapter saved locally, optional merged push to HuggingFace, optional GGUF `Q8_0` export for `llama.cpp`.
+Outputs: LoRA adapter saved locally, GGUF `Q8_0` export for `llama.cpp`.
 
 ## User Evaluation (n = 12)
 
-Structured evaluation through the NSU-APURBA-icddr,b form. Each user completed **6 task scenarios**, rated each on 7 dimensions, plus SUS, trust, ASR, and TTS questions.
+Structured evaluation through 10 clinicians and 2 normal users. Each user completed **6 task scenarios**, rated each on 7 dimensions, plus SUS, trust, ASR, and TTS questions.
 
 **Cohort:** 12 women, urban Bangladesh. Age 6–25 (3), 26–35 (3), 36–45 (3), 46–55 (3). Education: Master+ (8), Bachelor (4). Daily phone users.
 
@@ -120,9 +140,7 @@ Structured evaluation through the NSU-APURBA-icddr,b form. Each user completed *
 ## Quick Start
 
 ```bash
-vllm serve ./gemma_4b --enable_lora --lora_modules meno="./adapter_latest"
-export TELEGRAM_BOT_TOKEN="..."
-python telegram_bot.py
+
 ```
 
 ## Layout
@@ -132,13 +150,11 @@ python telegram_bot.py
 | `Gemma4_E4B_Menochat.ipynb` | LoRA training |
 | `menochat_pipeline.py` | Planner → RAG → responder → safety |
 | `telegram_bot.py` | Telegram front-end (text + voice) |
-| `audio_denoise.py` | Pre-ASR denoising |
 | `MenoChat_Kaggle_Writeup.md` | Hackathon write-up |
 
 ## Acknowledgements
-
-Apurba-NSU-RnD-Lab (dataset + baseline adapter), icddr,b (evaluation cohort), Unsloth (training template), Google DeepMind (Gemma 4).
+ Unsloth (training template), Google DeepMind (Gemma 4).
 
 ## License
 
-Code + LoRA: Apache 2.0. Gemma 4 base weights under Google's Gemma license.
+Apache 2.0. Gemma 4 base weights under Google's Gemma license.
