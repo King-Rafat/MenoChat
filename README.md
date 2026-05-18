@@ -157,12 +157,17 @@ Structured evaluation through 10 clinicians and 2 normal users. Each user comple
 | File | What |
 | --- | --- |
 | `Gemma4_E4B_Menochat.ipynb` | LoRA training |
-| `menochat_pipeline.py` | Planner → RAG → responder → safety |
-| `telegram_bot.py` | Telegram front-end (text + voice) |
-| `MenoChat_Kaggle_Writeup.md` | Hackathon write-up |
+| `chainlit_app_cpu.py` | runs chainlit web app |
+| `telegram_inside_chainlit.py` | Telegram front-end (text + voice) along with chainlit |
+| `llm_utils.py` | Planner → RAG → responder → safety |
+| `CPP_gemma.sh` | Run Gemma on GGUF |
+| `Opening page` | This is the starting page for the webapp |
+| `tts_server.py` | Runs the tts model on 5432 host |
+| `tts_server.py` | Runs the tts model on 5432 host using deploy_tts.sh|
+
 
 ## Acknowledgements
- Unsloth (training template), Google DeepMind (Gemma 4).
+ Unsloth (training template), Google DeepMind (Gemma 4). All of ASR+TTS+GEMMA+Chainlit have their own pyproject.toml to use the dependancies.
 
 ## License
 
