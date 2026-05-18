@@ -8,26 +8,6 @@
 
 MenoChat is a voice-first Bangla health assistant for menstrual and menopausal concerns. She speaks in Bangla. MenoChat listens, thinks in Bangla, and answers in Bangla, out loud, in a voice she can understand. No typing, no English, no judgement. Gemma 4 E2B is the brain. We chose it for three properties that made the rest of the system possible: open weights, so we could fine-tune freely on a domain no closed model would let us touch; a 2B footprint, so four structured calls still run in four to five seconds on one laptop GPU; the four calls allow more control and better denoising; and native multilingual training, which already understood Bangla before we taught it medical Bangla.
 
-## ASR
-
-Fine-tuned **Whisper-small (240M)** for Bangla women's health speech.
-
-- Model Checkpoint: https://huggingface.co/Apurba-NSU-RnD-Lab/MenoChat_Whisper_Small
-- Medical Adapter: https://huggingface.co/RafatK/Whisper_good_adapt
-- **Full Model Training** -> Noise augmentation (fans, traffic, TV chatter, white noise etc) and SpecAugment for robustness (MUSAN + Audiomentations + ESC 50) on 3200 hrs of Audio (Common Voice, OpenSLR, MADASR, KathBath, Shrutilipi)
-- **Adapter Training** -> Noise augmentation + Bangla medical vocab in fine-tune of adapter data
-- Flash Attention for fast inference on one GPU
-- Audio path: Telegram OGG/Opus → ffmpeg 16k mono WAV → denoise → Whisper
-
-**Benchmark on Common Voice Test-Set**
-| Model | WER |
-| --- | ---: |
-| Whisper large v3 | 40.35 |
-| Gemma 4 transcription | 30.74 |
-| Whisper-Small-Finetuned (Ours) | **16.54** |
-
-**User scores (n=12, Likert 1–5):** catches medical terms **4.42**, handles noisy speech **4.00**, fast **4.50**. Users tested on real semi-noisy scenarios
-
 ## Gemma 4 (the brain)
 
 Gemma 4 E2B with LoRA fine-tune on 5,187 Bangla women's health conversations.
@@ -71,6 +51,28 @@ on recall. Thread state survives across turns so follow-ups work.
 
 **GGUF_models_E2B for inference:** [`Gemma_E2B_GGUF`](https://huggingface.co/afifaimran/afi-gemma4-e2b-merged-gguf)
 **End-to-end latency:** ~4 to 5 seconds per turn on a single GPU 5070 laptop
+
+## ASR
+
+Fine-tuned **Whisper-small (240M)** for Bangla women's health speech.
+
+- Model Checkpoint: https://huggingface.co/Apurba-NSU-RnD-Lab/MenoChat_Whisper_Small
+- Medical Adapter: https://huggingface.co/RafatK/Whisper_good_adapt
+- **Full Model Training** -> Noise augmentation (fans, traffic, TV chatter, white noise etc) and SpecAugment for robustness (MUSAN + Audiomentations + ESC 50) on 3200 hrs of Audio (Common Voice, OpenSLR, MADASR, KathBath, Shrutilipi)
+- **Adapter Training** -> Noise augmentation + Bangla medical vocab in fine-tune of adapter data
+- Flash Attention for fast inference on one GPU
+- Audio path: Telegram OGG/Opus → ffmpeg 16k mono WAV → denoise → Whisper
+
+**Benchmark on Common Voice Test-Set**
+| Model | WER |
+| --- | ---: |
+| Whisper large v3 | 40.35 |
+| Gemma 4 transcription | 30.74 |
+| Whisper-Small-Finetuned (Ours) | **16.54** |
+
+**User scores (n=12, Likert 1–5):** catches medical terms **4.42**, handles noisy speech **4.00**, fast **4.50**. Users tested on real semi-noisy scenarios
+
+
 
 **User scores (n=12, Likert 1–5):**
 
