@@ -2,6 +2,7 @@ import asyncio
 import inspect
 import json
 import os
+import threading
 import time
 from copy import deepcopy
 from datetime import datetime
@@ -16,15 +17,29 @@ from openai import AsyncOpenAI
 import comorbidity
 
 
-PLANNER_MAX_NEW_TOKENS = 300
+# FIX: bumped from 300 to 500. Multi-intent JSON (cramps + diabetes etc.)
+# was getting truncated mid-output at 300, which broke JSON parsing and
+# triggered the out_of_scope fallback.
+PLANNER_MAX_NEW_TOKENS = 500
 PLANNER_TEMPERATURE = 0.0
 PLANNER_TOP_P = 0.9
+
+# FIX: safety net for when the planner over-zealously marks a comorbidity
+# turn as out_of_scope. If the user message clearly contains a menstrual
+# or menopausal keyword, we override the route to health_direct.
+_MENSTRUAL_TRIGGERS = re.compile(
+    r"period|menstr|cramp|pms|pcos|endometri|fibroid|menopaus|perimenopaus|"
+    r"ovari|hormone|bleeding|spotting|"
+    r"মাসিক|পিরিয়ড|ক্র্যাম্প|পেটে\s*ব্যথা|পেট\s*ব্যথা|হরমোন|রক্তস্রাব|"
+    r"রজঃনিবৃত্তি|মেনোপজ|পেরিমেনোপজ|পিসিওএস|এন্ডোমেট্রিওসিস|ফাইব্রয়েড|তলপেট",
+    re.IGNORECASE,
+)
 
 MULTIQUERY_MAX_NEW_TOKENS = 180
 MULTIQUERY_TEMPERATURE = 0.0
 MULTIQUERY_TOP_P = 0.9
 
-RESPONDER_MAX_NEW_TOKENS = 450
+RESPONDER_MAX_NEW_TOKENS = 500
 RESPONDER_TEMPERATURE = 0.2
 RESPONDER_TOP_P = 0.9
 
@@ -33,6 +48,22 @@ RETRIEVE_TOP_K = 20
 ANSWER_BLOCK_MAX_CHARS = 1400
 ANSWER_BLOCK_MAX_ITEMS = 5
 RERANK_SCORE_FLOOR = 0.15
+# Secondary intents (e.g. a comorbidity the user just mentions in passing) are
+# scored against their own question but live in a corpus that is biased toward
+# the primary domain (menstrual health). A slightly lower floor keeps them from
+# being filtered out entirely when the user's main ask is something else.
+RERANK_SCORE_FLOOR_SECONDARY = 0.12
+
+# Intent decomposition: most turns are 1 intent, occasionally 2, rarely 3.
+# Hard cap at 3 to keep latency bounded and prevent planner from over-spawning.
+MAX_INTENTS = 3
+PRIMARY_INTENT_BLOCK_QUOTA = 3
+SECONDARY_INTENT_BLOCK_QUOTA = 2
+
+# Single-intent turns keep the tighter token budget so we don't pay extra
+# latency on the common case. Multi-intent turns get more room since 2-3
+# conditions cannot be safely addressed in 3-5 compact lines.
+RESPONDER_MAX_NEW_TOKENS_MULTI = 400
 
 ALLOWED_RISK_LEVELS = {"none", "routine", "elevated", "urgent"}
 ALLOWED_PLANNER_ROUTES = {
@@ -73,10 +104,13 @@ DEFAULT_THREAD_STATE = {
 	"last_resolved_question": "",
 	"last_retrieval_query": "",
 	"last_route": "",
+	# Comorbidities/conditions the user has reported, accumulated across turns.
+	# Was previously a module-level list (DISEASEs_USER), which leaked across
+	# sessions in the same process. Now session-scoped.
+	"known_user_conditions": [],
 }
 
 SESSIONS: dict[str, dict[str, Any]] = {}
-DISEASEs_USER: list[str] = []
 
 # Cache planner decisions for the fixed Chainlit starter messages so the
 # first turn is essentially free for those exact strings.
@@ -102,6 +136,24 @@ _db_meta = None
 _db_uids = None
 _embed_model = None
 _reranker = None
+
+# Tokenizer thread-safety locks.
+#
+# BGE-M3 and BGE-reranker both use HuggingFace's Rust `tokenizers` library
+# under the hood. The Rust side holds mutable state via PyO3, so calling
+# `_embed_model.encode(...)` (or `_reranker.compute_score(...)`) from two
+# threads at once raises `RuntimeError('Already borrowed')`.
+#
+# Per-intent retrieval fans out N FAISS embed calls and M rerank calls
+# concurrently through the asyncio thread executor, which trips this. The
+# fix is to serialize ONLY the tokenizer-touching call inside each function;
+# everything else (FAISS index search, numpy ops, the per-intent rerank
+# running concurrently with another intent's FAISS) stays parallel.
+#
+# Two separate locks: embed and rerank can still overlap with each other,
+# they just can't overlap with another instance of themselves.
+_embed_lock = threading.Lock()
+_rerank_lock = threading.Lock()
 
 _session_storage_dir = Path("menochat_sessions")
 _executor = None
@@ -388,6 +440,36 @@ def apply_thread_state_patch(session_id: str, patch: dict) -> None:
 	sess["thread_state"].update(_sanitize_thread_state_patch(patch))
 
 
+def get_known_user_conditions(session_id: str) -> list[str]:
+	"""Session-scoped list of comorbidities the user has reported.
+
+	Reads from thread_state. Used by the responder so advice can account for
+	conditions like diabetes, hypertension, anemia, etc., across turns —
+	without leaking those across sessions (the old module-level DISEASEs_USER
+	leaked).
+	"""
+	sess = get_session(session_id)
+	conds = sess.get("thread_state", {}).get("known_user_conditions", []) or []
+	# Defensive: thread_state may have been loaded from disk with a non-list.
+	if not isinstance(conds, list):
+		return []
+	return [str(c).strip() for c in conds if _safe_strip(c)]
+
+
+def add_known_user_conditions(session_id: str, new_conds: list[str]) -> list[str]:
+	"""Merge new conditions into the session list (dedup, preserve order)."""
+	if not new_conds:
+		return get_known_user_conditions(session_id)
+	sess = get_session(session_id)
+	current = get_known_user_conditions(session_id)
+	for c in new_conds:
+		c = _safe_strip(c)
+		if c and c not in current:
+			current.append(c)
+	sess["thread_state"]["known_user_conditions"] = current
+	return current
+
+
 def format_recent_history(session_id: str, max_turns: int = MAX_HISTORY_TURNS, assistant_max_chars: int = 200) -> str:
 	sess = get_session(session_id)
 	history = sess.get("history", [])
@@ -540,7 +622,26 @@ def build_planner_prompt(session_id: str, user_message: str) -> str:
 	thread_state = sess.get("thread_state", {})
 	return f"""You are the router for a Bengali women's-health assistant. Output ONLY JSON.
 
-SCOPE: menstrual + menopausal health (period, cramp, PCOS, endometriosis, fibroid, PMS, perimenopause, menopause). Anything else = out_of_scope.
+SCOPE: menstrual + menopausal health (period, cramp, PCOS, endometriosis, fibroid, PMS, perimenopause, menopause).
+
+HARD RULE ABOUT COMORBIDITIES (READ THIS BEFORE PICKING A ROUTE):
+If the user mentions ANY menstrual or menopausal symptom in the message,
+the route is NEVER out_of_scope, even if they also mention diabetes,
+high blood pressure, thyroid, anemia, kidney issues, asthma, heart
+problems, pregnancy, or any other condition. The other condition becomes
+a SECONDARY intent. It modulates safe advice but does not kick the
+message out.
+
+Positive examples (these are IN-SCOPE):
+- "I have cramps and diabetes"          -> health_direct, 2 intents (cramps PRIMARY, diabetes SECONDARY)
+- "PCOS with high blood pressure"        -> health_direct, 2 intents (PCOS PRIMARY, BP SECONDARY)
+- "মাসিক ব্যথা আর ডায়াবেটিস"             -> health_direct, 2 intents
+- "পিরিয়ডে অনেক রক্ত যাচ্ছে আর আমি anemic" -> urgent_redflag or health_direct, 2 intents
+
+Negative examples (these ARE out_of_scope, no menstrual word):
+- "I have a fever"                       -> out_of_scope
+- "diabetes management tips"             -> out_of_scope
+- "back pain"                            -> out_of_scope
 
 ROUTES:
 - out_of_scope: not menstrual/menopausal
@@ -554,9 +655,22 @@ ROUTES:
 RULES:
 - Plain pain or worry = health_direct, NOT sensitive_supportive
 - When unsure between health_direct and sensitive_supportive, pick health_direct
-- resolved_question = ONE clean Bangla question, max 200 chars, no acknowledgement
 - answer_goal = concrete instruction, neutral for yes/no
 - needs_retrieval = true for all in-scope routes except smalltalk
+
+INTENT DECOMPOSITION (intents array):
+- If the user mentions ONE condition or asks ONE question, return ONE intent.
+- If the user mentions multiple distinct conditions in the same turn
+  (e.g. "cramps AND diabetes", "PCOS and high blood pressure"), return ONE
+  intent PER condition, max {MAX_INTENTS}.
+- Each intent must be self-contained — reading just that intent should be
+  enough to retrieve for it (no pronouns referring to other intents).
+- The FIRST intent must be the PRIMARY one (what the user is most directly
+  asking about). Comorbidities the user just mentions in passing
+  ("I also have X") are SECONDARY intents — they still belong in the list
+  because they affect safe advice.
+- resolved_question: ONE clean Bangla question for this intent, max 200 chars.
+- retrieval_query: best Bangla/English query for vector search.
 
 OUTPUT (JSON only, no other text):
 {{
@@ -564,8 +678,14 @@ OUTPUT (JSON only, no other text):
   "risk_level": "none|routine|elevated|urgent",
   "depends_on_history": true|false,
   "needs_retrieval": true|false,
-  "resolved_question": "...",
-  "retrieval_query": "...",
+  "intents": [
+    {{
+      "topic": "short tag e.g. 'cramps', 'diabetes'",
+      "resolved_question": "...",
+      "retrieval_query": "...",
+      "is_primary": true|false
+    }}
+  ],
   "answer_goal": "...",
   "thread_state_patch": {{"active_topic": "", "risk_level": "", "last_resolved_question": "", "last_retrieval_query": "", "last_route": ""}}
 }}
@@ -611,10 +731,20 @@ async def run_planner(session_id: str, user_message: str) -> dict:
 		}
 
 	route = _normalize_ws(parsed.get("route", "out_of_scope"))
-	if route == "out_of_scope":
-		route = "out_of_scope"
 	if route not in ALLOWED_PLANNER_ROUTES:
 		route = "out_of_scope"
+
+	# FIX: safety override. If the planner panicked and said out_of_scope
+	# but the user clearly mentioned a menstrual/menopausal symptom, force
+	# the route back to health_direct. Catches the small-model failure
+	# mode where naming any comorbidity (diabetes, etc.) kicks the whole
+	# turn out of scope.
+	if route == "out_of_scope" and _MENSTRUAL_TRIGGERS.search(user_message or ""):
+		print(
+			f"[planner] OVERRIDE out_of_scope -> health_direct "
+			f"(menstrual trigger found in: {user_message[:80]!r})"
+		)
+		route = "health_direct"
 
 	risk_level = _normalize_ws(parsed.get("risk_level", "none")).lower()
 	if risk_level not in ALLOWED_RISK_LEVELS:
@@ -622,8 +752,51 @@ async def run_planner(session_id: str, user_message: str) -> dict:
 
 	depends_on_history = bool(parsed.get("depends_on_history", False))
 	needs_retrieval = bool(parsed.get("needs_retrieval", False))
-	resolved_question = _normalize_ws(parsed.get("resolved_question", user_message))[:300]
-	retrieval_query = _normalize_ws(parsed.get("retrieval_query", ""))[:300]
+
+	# --- Intent decomposition ---
+	# New schema: parsed["intents"] is a list. Fall back to legacy single-intent
+	# fields if the planner didn't emit it (older model, parse failure, etc.)
+	# so behavior on single-intent turns is identical to before.
+	raw_intents = parsed.get("intents") or []
+	intents: list[dict] = []
+	if isinstance(raw_intents, list):
+		for it in raw_intents[:MAX_INTENTS]:
+			if not isinstance(it, dict):
+				continue
+			rq = _normalize_ws(it.get("resolved_question", ""))[:300]
+			rtq = _normalize_ws(it.get("retrieval_query", ""))[:300] or rq
+			topic = _normalize_ws(it.get("topic", ""))[:60]
+			if not rq:
+				continue
+			intents.append({
+				"topic": topic or rq[:30],
+				"resolved_question": rq,
+				"retrieval_query": rtq,
+				"is_primary": bool(it.get("is_primary", len(intents) == 0)),
+			})
+	# Backward-compat fallback.
+	if not intents:
+		legacy_rq = _normalize_ws(parsed.get("resolved_question", user_message))[:300]
+		legacy_rtq = _normalize_ws(parsed.get("retrieval_query", ""))[:300] or legacy_rq
+		intents = [{
+			"topic": "main",
+			"resolved_question": legacy_rq,
+			"retrieval_query": legacy_rtq,
+			"is_primary": True,
+		}]
+	# Guarantee exactly one primary intent (first one wins if multiple flagged).
+	primary_found = False
+	for i in intents:
+		if i["is_primary"] and not primary_found:
+			primary_found = True
+		else:
+			i["is_primary"] = False
+	if not primary_found:
+		intents[0]["is_primary"] = True
+
+	primary = next(i for i in intents if i["is_primary"])
+	resolved_question = primary["resolved_question"]
+	retrieval_query = primary["retrieval_query"]
 	answer_goal = _normalize_ws(parsed.get("answer_goal", "answer the user's question directly"))
 
 	if route in RETRIEVAL_REQUIRED_ROUTES:
@@ -631,10 +804,15 @@ async def run_planner(session_id: str, user_message: str) -> dict:
 	if route in {"smalltalk", "out_of_scope"}:
 		needs_retrieval = False
 		retrieval_query = ""
-	if needs_retrieval and not retrieval_query:
-		retrieval_query = resolved_question
 
 	llm_patch = parsed.get("thread_state_patch", {}) or {}
+	# Surface any non-primary intent topics into known_user_conditions so future
+	# turns remember them (e.g. user mentions diabetes once, future cramps
+	# advice still factors it in).
+	secondary_topics = [i["topic"] for i in intents if not i["is_primary"]]
+	if secondary_topics:
+		add_known_user_conditions(sess["session_id"], secondary_topics)
+
 	thread_state_patch = _sanitize_thread_state_patch(
 		{
 			"active_topic": llm_patch.get("active_topic", "") or resolved_question[:100],
@@ -651,11 +829,21 @@ async def run_planner(session_id: str, user_message: str) -> dict:
 		"risk_level": risk_level,
 		"depends_on_history": depends_on_history,
 		"needs_retrieval": needs_retrieval,
-		"resolved_question": resolved_question,
-		"retrieval_query": retrieval_query,
+		"intents": intents,
+		"resolved_question": resolved_question,  # primary, for back-compat
+		"retrieval_query": retrieval_query,       # primary, for back-compat
 		"answer_goal": answer_goal,
 		"thread_state_patch": thread_state_patch,
 	}
+
+	# FIX: one-line debug print so terminal shows exactly what the planner
+	# decided for each turn. Helpful for diagnosing routing failures like
+	# "cramps + diabetes" getting kicked to out_of_scope.
+	print(
+		f"[planner] route={route} | risk={risk_level} | "
+		f"needs_retrieval={needs_retrieval} | n_intents={len(intents)} | "
+		f"topics={[i.get('topic', '') for i in intents]}"
+	)
 
 	sess["controller_last_decision"] = out
 	return out
@@ -665,37 +853,49 @@ async def run_planner(session_id: str, user_message: str) -> dict:
 # MULTI-QUERY (separate call, kept on its own as you wanted)
 # =====================================================================
 
-def build_multiquery_prompt(session_id: str, user_message: str) -> str:
+def build_multiquery_prompt(session_id: str, user_message: str, intents: list[dict] | None = None) -> str:
 	"""
-	Multi-query prompt now depends ONLY on the user's message + history.
-	No planner output is required, so this LLM call can run IN PARALLEL with
-	the planner instead of after it.
+	Multi-query prompt now generates queries PER INTENT. This lets us cover
+	each condition the user mentioned (e.g. cramps AND diabetes) instead of
+	collapsing into one topic.
+
+	Depends only on user message + history + the planner's intent list, so
+	this LLM call can still run IN PARALLEL with the planner — we just pass
+	a single-intent fallback when intents aren't available yet.
 	"""
 	recent_history = format_recent_history(session_id, max_turns=6)
+	intents = intents or [{"topic": "main", "resolved_question": user_message}]
+	intents_block = json.dumps(
+		[{"topic": i.get("topic", ""), "question": i.get("resolved_question", "")} for i in intents],
+		ensure_ascii=False,
+	)
 	return f"""
 You generate retrieval queries for a Bengali women's-health assistant.
 
-Your ONLY job is to produce 2-4 good search queries for a vector database
-based on the user's latest message and recent conversation.
+Your ONLY job is to produce search queries for a vector database, ONE GROUP
+PER INTENT. The intents are pre-decomposed for you. Do not remove USER HEALTH
+INFORMATION from the paraphrased queries.
 
 RULES:
-- Query 1 must be the best standalone version of the user's actual question (Bangla).
-- Queries 2-4 should be paraphrases, slightly broader formulations, or English
-  retrieval-friendly versions of the same question.
-- All queries must stay focused on the same topic.
-- Mix Bengali and English if that improves retrieval.
-- If the latest message is a vague follow-up (e.g. "তাহলে কি করব?"), use the
-  recent conversation to infer the actual underlying topic and write
-  standalone queries about that topic.
+- For EACH intent below, produce 1-2 queries focused on THAT intent's topic.
+- Total queries across all intents: max 4.
+- Within an intent, query 1 should be the best standalone Bangla version,
+  query 2 (optional) can be an English/paraphrased version for retrieval.
+- Keep every query self-contained — no pronouns referring to other intents.
+- Do NOT merge intents into a single query — each query targets ONE intent.
 - Do NOT answer the question.
 - Do NOT explain anything.
-- Do NOT add queries about unrelated topics.
-- If the latest message is clearly out-of-scope (not menstrual/menopausal
-  health) or pure smalltalk, return an empty list.
+- If the latest message is clearly out-of-scope or pure smalltalk, return
+  an empty list for that intent.
+
+Intents to cover:
+{intents_block}
 
 Return ONLY valid JSON:
 {{
-  "queries": ["q1", "q2", "q3"]
+  "queries_by_intent": [
+    {{"topic": "...", "queries": ["q1", "q2"]}}
+  ]
 }}
 
 Recent conversation:
@@ -707,38 +907,66 @@ Latest user message:
 
 
 async def generate_multi_queries(
-	session_id: str, user_message: str, max_queries: int = 4
-) -> tuple[list[str], dict | None]:
+	session_id: str,
+	user_message: str,
+	max_queries: int = 4,
+	intents: list[dict] | None = None,
+) -> tuple[dict[str, list[str]], dict | None]:
 	"""
-	Generate retrieval queries from user_message + history alone.
-	No planner dependency, so this can be fired in parallel with the planner.
-	"""
-	base_queries = [_normalize_ws(user_message)] if user_message else []
+	Generate retrieval queries per intent.
 
-	prompt = build_multiquery_prompt(session_id, user_message)
+	Returns ({topic -> [queries]}, raw_parsed_json).
+	On parse failure or older planner output, falls back to a single-intent
+	dict keyed by the first intent's topic (or "main"), so callers that only
+	want a flat list can still flatten the values.
+	"""
+	prompt = build_multiquery_prompt(session_id, user_message, intents=intents)
 	gen_text = await llm_chat(
 		prompt,
 		max_tokens=MULTIQUERY_MAX_NEW_TOKENS,
 		temperature=MULTIQUERY_TEMPERATURE,
 		top_p=MULTIQUERY_TOP_P,
-		extra_body=llama_cpp_extra_body(1.1, enable_thinking = False),
+		extra_body=llama_cpp_extra_body(1.1, enable_thinking=False),
 		tag="multiquery",
 	)
 	parsed = _extract_first_json_object(gen_text)
 
-	llm_queries = []
+	queries_by_intent: dict[str, list[str]] = {}
+	total = 0
+
 	if isinstance(parsed, dict):
-		for q in parsed.get("queries", []):
-			q = _normalize_ws(q)
-			if q and q not in llm_queries:
-				llm_queries.append(q)
+		raw_groups = parsed.get("queries_by_intent", []) or []
+		# Be lenient: also accept legacy {"queries": [...]} shape.
+		if not raw_groups and isinstance(parsed.get("queries"), list):
+			legacy_topic = (intents[0].get("topic") if intents else "main") or "main"
+			raw_groups = [{"topic": legacy_topic, "queries": parsed["queries"]}]
+		for grp in raw_groups:
+			if not isinstance(grp, dict):
+				continue
+			topic = _normalize_ws(grp.get("topic", "")) or "main"
+			qs = []
+			for q in grp.get("queries", []) or []:
+				q = _normalize_ws(q)
+				if q and q not in qs:
+					qs.append(q)
+				if total + len(qs) >= max_queries:
+					break
+			if qs:
+				queries_by_intent.setdefault(topic, []).extend(qs)
+				total += len(qs)
+			if total >= max_queries:
+				break
 
-	final_queries = []
-	for q in llm_queries + base_queries:
-		if q and q not in final_queries:
-			final_queries.append(q)
+	# Always seed each intent with its own resolved_question/retrieval_query
+	# so retrieval can't return empty just because the multi-query LLM failed.
+	if intents:
+		for it in intents:
+			topic = it.get("topic", "main") or "main"
+			seed_q = _normalize_ws(it.get("retrieval_query") or it.get("resolved_question") or "")
+			if seed_q and seed_q not in queries_by_intent.get(topic, []):
+				queries_by_intent.setdefault(topic, []).append(seed_q)
 
-	return final_queries[:max_queries], parsed if isinstance(parsed, dict) else None
+	return queries_by_intent, parsed if isinstance(parsed, dict) else None
 
 
 def tell_this_is_beyond_chatbot_capacity() -> str:
@@ -820,15 +1048,21 @@ def _normalize_for_dedup(text: str) -> str:
 # =====================================================================
 
 def _faiss_only_search(query: str, top_k: int = RETRIEVE_TOP_K) -> list[dict]:
-	"""FAISS only. No rerank. Cheap so we can run several in parallel."""
-	q_emb = _embed_model.encode(
-		[query],
-		batch_size=1,
-		max_length=512,
-		return_dense=True,
-		return_sparse=False,
-		return_colbert_vecs=False,
-	)["dense_vecs"]
+	"""FAISS only. No rerank. Cheap so we can run several in parallel.
+
+	The `_embed_model.encode(...)` call is serialized via `_embed_lock`
+	because BGE-M3's HF tokenizer is not thread-safe (PyO3 'Already borrowed'
+	error on concurrent access). Everything else stays parallel-safe.
+	"""
+	with _embed_lock:
+		q_emb = _embed_model.encode(
+			[query],
+			batch_size=1,
+			max_length=512,
+			return_dense=True,
+			return_sparse=False,
+			return_colbert_vecs=False,
+		)["dense_vecs"]
 	q = np.array(q_emb, dtype=np.float32)
 	if q.ndim == 1:
 		q = q.reshape(1, -1)
@@ -863,12 +1097,19 @@ async def faiss_only_search_async(query: str, top_k: int = RETRIEVE_TOP_K) -> li
 
 
 def _rerank_once(query: str, items: list[dict]) -> list[dict]:
-	"""One rerank pass over the deduped union of all FAISS results."""
+	"""One rerank pass over the deduped union of all FAISS results.
+
+	The `_reranker.compute_score(...)` call is serialized via `_rerank_lock`
+	because the reranker's HF tokenizer is not thread-safe (PyO3 'Already
+	borrowed' error on concurrent access). Sorting/scoring around it stays
+	parallel-safe.
+	"""
 	if not items:
 		return []
 	t0 = time.perf_counter()
 	pairs = [(query, it["text"]) for it in items]
-	scores = _reranker.compute_score(pairs, normalize=True)
+	with _rerank_lock:
+		scores = _reranker.compute_score(pairs, normalize=True)
 	if isinstance(scores, (float, int)):
 		scores = [float(scores)]
 	else:
@@ -891,11 +1132,12 @@ def build_larger_clean_context_blocks(
 	results: list[dict],
 	max_items: int = ANSWER_BLOCK_MAX_ITEMS,
 	max_chars: int = ANSWER_BLOCK_MAX_CHARS,
+	floor: float = RERANK_SCORE_FLOOR,
 ) -> list[dict]:
 	blocks = []
 	seen = set()
 	for item in results:
-		if float(item.get("rerank_score", -999)) < RERANK_SCORE_FLOOR:
+		if float(item.get("rerank_score", -999)) < floor:
 			continue
 		text = item.get("text", "") or _get_chunk_text(item.get("chunk", ""))
 		text = _remove_inline_junk(text)
@@ -996,58 +1238,40 @@ def _pretty_source_label(url: str, fallback: str = "") -> str:
 		return fallback or "source"
 
 
-async def maybe_run_retrieval_from_plan(
-	plan: dict,
-	user_message: str | None = None,
-	session_id: str | None = None,
-	prefetch_results: list[dict] | None = None,
-	query_variants: list[str] | None = None,
-	mq_parsed: dict | None = None,
-) -> list[dict] | str:
+async def _retrieve_for_intent(
+	intent: dict,
+	mq_queries: list[str],
+	prefetch_results: list[dict] | None,
+	use_prefetch: bool,
+) -> tuple[dict, list[dict]]:
+	"""FAISS for this intent's queries (in parallel), merge with prefetch if
+	primary, then rerank against THIS intent's resolved_question.
+
+	Reranking per intent is the key fix: previously one global rerank against
+	the primary question filtered out everything off-topic (e.g. diabetes
+	chunks scored against "cramps"). Per-intent reranking lets each topic
+	bring its own best chunks into the responder context.
 	"""
-	Retrieval pipeline. Multi-query is now expected to be pre-computed and
-	passed in via `query_variants` (because it ran in parallel with the
-	planner upstream in run_chat_turn).
-
-	Steps:
-	  1) FAISS search for each query variant in PARALLEL.
-	  2) Merge with prefetch_results (FAISS on raw user message).
-	  3) Dedupe by chunk idx.
-	  4) ONE rerank pass over the deduped union, scored against the resolved
-	     question. Way cheaper than reranking each query's results separately.
-	"""
-	route = plan.get("route", "")
-	needs_retrieval = bool(plan.get("needs_retrieval", False))
-
-	if route == "out_of_scope":
-		plan["_retrieval_debug"] = {"reason": "planner_marked_out_of_scope"}
-		return tell_this_is_beyond_chatbot_capacity()
-
-	if not needs_retrieval:
-		plan["_retrieval_debug"] = {"reason": "planner_marked_no_retrieval"}
-		return []
-
-	# Use pre-computed queries from the parallel multi-query call.
-	queries = [q for q in (query_variants or []) if q]
-	# Always seed at least the planner's resolved_question or user message.
-	for fallback in [plan.get("resolved_question"), user_message]:
-		f = _normalize_ws(fallback or "")
-		if f and f not in queries:
-			queries.append(f)
+	queries = [
+		intent.get("retrieval_query", ""),
+		intent.get("resolved_question", ""),
+	]
+	for q in mq_queries or []:
+		if q and q not in queries:
+			queries.append(q)
+	queries = [q for q in dict.fromkeys(filter(None, queries))][:3]
 	if not queries:
-		queries = [_normalize_ws(user_message or "")]
-	queries = [q for q in queries if q][:4]
+		return intent, []
 
-	t0 = time.perf_counter()
+	# 1) FAISS in parallel across this intent's queries
+	faiss_lists = await asyncio.gather(*[faiss_only_search_async(q) for q in queries])
 
-	# 1) FAISS in parallel
-	faiss_tasks = [faiss_only_search_async(q) for q in queries]
-	faiss_lists = await asyncio.gather(*faiss_tasks) if faiss_tasks else []
-
-	# 2 + 3) Merge with prefetch and dedupe
+	# 2) Merge with prefetch (only the primary intent gets prefetch, since
+	#    prefetch was a FAISS search on the raw user message and may be biased
+	#    toward the primary topic). Dedupe by chunk idx.
 	merged: list[dict] = []
 	seen_idx: set = set()
-	if prefetch_results:
+	if use_prefetch and prefetch_results:
 		for r in prefetch_results:
 			if r["idx"] not in seen_idx:
 				seen_idx.add(r["idx"])
@@ -1058,29 +1282,168 @@ async def maybe_run_retrieval_from_plan(
 				seen_idx.add(r["idx"])
 				merged.append(r)
 
+	if not merged:
+		return intent, []
+
+	# 3) Rerank against THIS intent's resolved_question
+	rerank_query = intent.get("resolved_question") or queries[0]
+	reranked = await rerank_once_async(rerank_query, merged)
+	return intent, reranked
+
+
+async def maybe_run_retrieval_from_plan(
+	plan: dict,
+	user_message: str | None = None,
+	session_id: str | None = None,
+	prefetch_results: list[dict] | None = None,
+	queries_by_intent: dict[str, list[str]] | None = None,
+	mq_parsed: dict | None = None,
+) -> list[dict] | str:
+	"""
+	Per-intent retrieval pipeline.
+
+	Steps:
+	  1) For EACH intent, run FAISS in parallel over its queries.
+	  2) Merge with prefetch (only on the primary intent — prefetch was a
+	     FAISS search on the raw user message and is naturally biased toward
+	     the primary topic).
+	  3) Rerank EACH intent's pool against THAT intent's resolved_question.
+	  4) Quota-merge: primary intent gets PRIMARY_INTENT_BLOCK_QUOTA blocks,
+	     each secondary gets SECONDARY_INTENT_BLOCK_QUOTA. Secondaries use a
+	     slightly lower rerank floor.
+
+	Returns a flat list of context blocks (for callers that consume the old
+	contract) AND populates plan["_context_blocks_by_intent"] for the
+	responder to render grouped context.
+	"""
+	route = plan.get("route", "")
+	needs_retrieval = bool(plan.get("needs_retrieval", False))
+
+	if route == "out_of_scope":
+		plan["_retrieval_debug"] = {"reason": "planner_marked_out_of_scope"}
+		return tell_this_is_beyond_chatbot_capacity()
+
+	if not needs_retrieval:
+		plan["_retrieval_debug"] = {"reason": "planner_marked_no_retrieval"}
+		plan["_context_blocks_by_intent"] = []
+		return []
+
+	intents = plan.get("intents") or []
+	if not intents:
+		# Should never happen with the new planner, but be defensive.
+		intents = [{
+			"topic": "main",
+			"resolved_question": plan.get("resolved_question", "") or (user_message or ""),
+			"retrieval_query": plan.get("retrieval_query", "") or (user_message or ""),
+			"is_primary": True,
+		}]
+
+	queries_by_intent = queries_by_intent or {}
+
+	t0 = time.perf_counter()
+
+	# Per-intent retrieval in parallel (each intent itself does parallel FAISS).
+	intent_tasks = []
+	for it in intents:
+		mq_queries = queries_by_intent.get(it.get("topic", ""), [])
+		intent_tasks.append(
+			_retrieve_for_intent(
+				it,
+				mq_queries,
+				prefetch_results,
+				use_prefetch=bool(it.get("is_primary")),
+			)
+		)
+	intent_results = await asyncio.gather(*intent_tasks)
+
 	faiss_dt = time.perf_counter() - t0
-	print(f"[retrieval] faiss merge: {faiss_dt:.2f}s | queries={len(queries)} | merged={len(merged)}")
-
-	# 4) Single rerank pass over deduped union
-	rerank_query = plan.get("resolved_question") or (queries[0] if queries else "")
-	merged = await rerank_once_async(rerank_query, merged)
-
-	# Clean context blocks
-	context_blocks = build_larger_clean_context_blocks(
-		merged,
-		max_items=ANSWER_BLOCK_MAX_ITEMS,
-		max_chars=ANSWER_BLOCK_MAX_CHARS,
+	print(
+		f"[retrieval] per-intent: {faiss_dt:.2f}s | "
+		f"intents={len(intents)} | "
+		f"pools={[len(rr) for _, rr in intent_results]}"
 	)
 
+	# Build blocks per intent with quotas and floors.
+	context_blocks_by_intent: list[dict] = []
+	flat_blocks: list[dict] = []
+	flat_seen = set()
+	for it, reranked in intent_results:
+		is_primary = bool(it.get("is_primary"))
+		quota = PRIMARY_INTENT_BLOCK_QUOTA if is_primary else SECONDARY_INTENT_BLOCK_QUOTA
+		floor = RERANK_SCORE_FLOOR if is_primary else RERANK_SCORE_FLOOR_SECONDARY
+
+		blocks = build_larger_clean_context_blocks(
+			reranked,
+			max_items=quota,
+			max_chars=ANSWER_BLOCK_MAX_CHARS,
+			floor=floor,
+		)
+		context_blocks_by_intent.append({"intent": it, "blocks": blocks})
+
+		# Flatten with cross-intent dedup so the legacy flat list doesn't
+		# repeat the same chunk twice.
+		for b in blocks:
+			key = _normalize_for_dedup(b.get("text", ""))
+			if key and key not in flat_seen:
+				flat_seen.add(key)
+				flat_blocks.append(b)
+
+	plan["_context_blocks_by_intent"] = context_blocks_by_intent
 	plan["_retrieval_debug"] = {
 		"reason": "retrieval_ran",
 		"llm_multiquery_output": mq_parsed if isinstance(mq_parsed, dict) else {},
-		"query_variants": queries,
-		"merged_count": len(merged),
-		"final_context_count": len(context_blocks),
-		"top_rerank_score": float(merged[0]["rerank_score"]) if merged else None,
+		"intents": [
+			{
+				"topic": grp["intent"].get("topic", ""),
+				"is_primary": grp["intent"].get("is_primary", False),
+				"n_blocks": len(grp["blocks"]),
+				"top_rerank": grp["blocks"][0]["rerank_score"] if grp["blocks"] else None,
+			}
+			for grp in context_blocks_by_intent
+		],
+		"merged_count": sum(len(rr) for _, rr in intent_results),
+		"final_context_count": len(flat_blocks),
+		"top_rerank_score": (
+			max((grp["blocks"][0]["rerank_score"] for grp in context_blocks_by_intent if grp["blocks"]),
+				default=None)
+		),
+		"query_variants": [q for qs in queries_by_intent.values() for q in qs],
 	}
-	return context_blocks
+	# Cap the flat list at ANSWER_BLOCK_MAX_ITEMS for callers that still rely
+	# on the old size envelope.
+	return flat_blocks[:ANSWER_BLOCK_MAX_ITEMS + SECONDARY_INTENT_BLOCK_QUOTA * (MAX_INTENTS - 1)]
+
+
+def format_grouped_context_for_prompt(groups: list[dict]) -> str:
+	"""Render retrieved context grouped by intent so the responder can
+	clearly see which chunks belong to which user-mentioned condition.
+
+	Falls back to a flat 'No reliable retrieval context available.' when
+	nothing came back."""
+	if not groups:
+		return "No reliable retrieval context available."
+	any_blocks = any(g.get("blocks") for g in groups)
+	if not any_blocks:
+		return "No reliable retrieval context available."
+
+	parts = []
+	for g in groups:
+		intent = g.get("intent", {})
+		topic = intent.get("topic", "main")
+		rq = intent.get("resolved_question", "")
+		is_primary = intent.get("is_primary", False)
+		tag = "PRIMARY" if is_primary else "SECONDARY"
+		blocks = g.get("blocks") or []
+		header = f"[{tag} | Topic: {topic} | Question: {rq}]"
+		if not blocks:
+			parts.append(f"{header}\n(no reliable context found for this intent — say so honestly)")
+			continue
+		block_text = "\n\n".join(
+			f"-- Source {i + 1} --\n{b['text']}" for i, b in enumerate(blocks)
+		)
+		parts.append(f"{header}\n{block_text}")
+	separator = "\n\n" + ("=" * 60) + "\n\n"
+	return "\n\n" + separator.join(parts)
 
 
 def build_responder_prompt(
@@ -1092,9 +1455,17 @@ def build_responder_prompt(
 	sess = get_session(session_id)
 	recent_history = format_recent_history(session_id, max_turns=6)
 	thread_state = sess.get("thread_state", {})
-	retrieval_context = format_larger_context_blocks_for_prompt(context_blocks)
+	# Prefer grouped (per-intent) context if available; fall back to flat.
+	groups = plan.get("_context_blocks_by_intent") or []
+	if groups:
+		retrieval_context = format_grouped_context_for_prompt(groups)
+	else:
+		retrieval_context = format_larger_context_blocks_for_prompt(context_blocks)
+
 	route = plan.get("route", "health_direct")
 	risk_level = plan.get("risk_level", "routine")
+	intents = plan.get("intents") or []
+	multi_intent = len(intents) > 1
 
 	route_instructions = ""
 	if route == "urgent_redflag" or risk_level == "urgent":
@@ -1113,21 +1484,55 @@ def build_responder_prompt(
 - reassurance দেবে, কিন্তু বানানো আশ্বাস দেবে না।
 """
 
+	# Conditional length cap: 3-5 lines is fine for single-intent turns, but
+	# two or three conditions can't be addressed safely in that space.
+	if multi_intent:
+		length_rule = (
+			"- প্রতিটি intent-কে আলাদা ছোট অনুচ্ছেদে সম্বোধন করো, মোট ৬-৯ লাইনের মধ্যে রাখো।"
+		)
+		multi_intent_block = """
+একাধিক সমস্যার ক্ষেত্রে (MULTI-INTENT):
+- ব্যবহারকারী একই টার্নে একাধিক সমস্যা উল্লেখ করেছেন (যেমন ক্র্যাম্প + ডায়াবেটিস)।
+  প্রতিটি সমস্যাকে আলাদাভাবে স্বীকার ও সম্বোধন করতে হবে — কোনোটিকে উপেক্ষা করবে না।
+- প্রাথমিক (PRIMARY) সমস্যাকে আগে বিস্তারিতভাবে উত্তর দাও।
+- তারপর সহ-অবস্থা (SECONDARY) কীভাবে প্রাথমিক পরামর্শকে প্রভাবিত করছে সেটি সংক্ষেপে
+  বলো — যেমন ডায়াবেটিস থাকলে কোন ঘরোয়া উপায় নিরাপদ নয়, কী এড়িয়ে চলতে হবে।
+- কোনো intent-এর জন্য নির্ভরযোগ্য context না থাকলে সৎভাবে বলো যে সেই বিষয়ে
+  নির্দিষ্ট তথ্য পাওয়া যায়নি, ডাক্তারের পরামর্শ নিতে বলো।
+"""
+	else:
+		length_rule = "- make your answer generation maximum three to five compact lines."
+		multi_intent_block = ""
+
+	intents_summary = (
+		json.dumps(
+			[{"topic": i.get("topic", ""),
+			  "resolved_question": i.get("resolved_question", ""),
+			  "is_primary": i.get("is_primary", False)} for i in intents],
+			ensure_ascii=False,
+		)
+		if intents else "[]"
+	)
+	known_conditions = get_known_user_conditions(session_id)
+
 	return f"""
-তুমি একজন সহানুভূতিশীল, তথ্যনির্ভর বাংলা স্বাস্থ্য-সহকারী।
+তুমি একজন সহানুভূতিশীল, তথ্যনির্ভর বাংলা স্বাস্থ্য-সহকারী। Make the answers concise
 
 {route_instructions}
+{multi_intent_block}
 
 তোমার উত্তর:
 - উত্তর ১০০% বাংলায় হবে। কোনো ইংরেজি শব্দ, transliteration, বা latin script ব্যবহার করবে না।
-- make your answer generation maximum three to five compact lines.
+{length_rule}
 - কোনো ওষুধের নাম (brand বা generic) কখনো উল্লেখ করবে না। ওষুধের প্রয়োজন হলে শুধু "ডাক্তারের পরামর্শ নিন" বলবে।
 - সহজ, paragraph-based, সম্মানজনক, বাংলাদেশি ব্যবহারকারীর জন্য উপযোগী
 - প্রথমে সরাসরি উত্তর, তারপর সংক্ষিপ্ত ব্যাখ্যা
+- make the asnwers concise
 - follow-up হলে আগের context ব্যবহার করবে, পুরোনো উত্তর repeat করবে না
 - retrieved context-এর তথ্য নিজের ভাষায় ব্যবহার করবে, কপি করবে না
 - thin, vague, repetitive উত্তর দেবে না
 - metadata, id, score, source label, chunk dump কিছুই output করবে না
+- "PRIMARY", "SECONDARY", "Topic:" — এসব internal label কখনো উত্তরে লিখবে না
 
 Grounding (hallucination prevention):
 শুধু (ক) ব্যবহারকারী এই conversation-এ যা বলেছেন, বা (খ) retrieved context-এ যা স্পষ্টভাবে আছে — সেগুলোই ব্যবহার করবে। নিজের অন্য medical knowledge যোগ করবে না।
@@ -1142,15 +1547,16 @@ Latest user message:
 {user_message}
 
 Route: {route} | Risk: {risk_level}
-Resolved question: {plan.get("resolved_question", "")}
+Intents (for your reference, do not echo these labels):
+{intents_summary}
 Answer goal: {plan.get("answer_goal", "")}
-User disease: {DISEASEs_USER}
+Known user conditions across session: {known_conditions}
 Thread state: {json.dumps(thread_state, ensure_ascii=False)}
 
 Recent conversation:
 {recent_history}
 
-Retrieved context:
+Retrieved context (grouped by intent):
 {retrieval_context}
 """.strip()
 
@@ -1159,6 +1565,7 @@ async def _stream_answer(
 	prompt: str,
 	stream_callback: Optional[Callable[[str], Awaitable[None] | None]] = None,
 	thinking_callback: Optional[Callable[[str], Awaitable[None] | None]] = None,
+	max_tokens: int = RESPONDER_MAX_NEW_TOKENS,
 ) -> str:
 	"""Stream the responder output, splitting thinking and final-answer tokens.
 
@@ -1182,7 +1589,7 @@ async def _stream_answer(
 		model=_llm_model_name,
 		messages=[{"role": "user", "content": prompt}],
 		stream=True,
-		max_tokens=RESPONDER_MAX_NEW_TOKENS,
+		max_tokens=max_tokens,
 		temperature=RESPONDER_TEMPERATURE,
 		top_p=RESPONDER_TOP_P,
 		extra_body=llama_cpp_extra_body(1.1, enable_thinking = False),
@@ -1245,15 +1652,20 @@ async def generate_answer(
 	thinking_callback: Optional[Callable[[str], Awaitable[None] | None]] = None,
 ) -> str:
 	prompt = build_responder_prompt(session_id, user_message, plan, context_blocks)
+	# Multi-intent turns need more room; single-intent keep the tighter budget
+	# so we don't pay extra latency on the common case.
+	n_intents = len(plan.get("intents") or [])
+	max_tokens = RESPONDER_MAX_NEW_TOKENS_MULTI if n_intents > 1 else RESPONDER_MAX_NEW_TOKENS
 	if stream:
 		return await _stream_answer(
 			prompt,
 			stream_callback=stream_callback,
 			thinking_callback=thinking_callback,
+			max_tokens=max_tokens,
 		)
 	return await llm_chat(
 		prompt,
-		max_tokens=RESPONDER_MAX_NEW_TOKENS,
+		max_tokens=max_tokens,
 		temperature=RESPONDER_TEMPERATURE,
 		top_p=RESPONDER_TOP_P,
 		extra_body=llama_cpp_extra_body(1.1, enable_thinking = False),
@@ -1261,7 +1673,7 @@ async def generate_answer(
 	)
 
 
-async def food2disease_como(user_message: str) -> str:
+async def food2disease_como(user_message: str, session_id: str | None = None) -> str:
 	# Cheap pre-filter: if the answer mentions no food at all, skip the LLM
 	# call entirely. Most turns about cramps/PCOS/etc never mention food.
 	if not _BANGLA_FOOD_HINTS.search(user_message or ""):
@@ -1380,15 +1792,25 @@ Return ONLY valid JSON:
 
 	print(results)
 
-	DISEASEs_USER.extend(answer.get("detected_disease", []))
-	unique_diseases = list(set(DISEASEs_USER))
-	DISEASEs_USER.clear()
-	DISEASEs_USER.extend(unique_diseases)
-
-	file_path = os.path.join("menochat_diseases", "diseases_USER.txt")
-	with open(file_path, "w") as f:
-		for d in DISEASEs_USER:
-			f.write(d + "\n")
+	# Session-scoped condition tracking (replaces the old module-level
+	# DISEASEs_USER list which leaked across sessions in the same process).
+	detected_diseases = [
+		_safe_strip(d) for d in (answer.get("detected_disease") or []) if _safe_strip(d)
+	]
+	if session_id and detected_diseases:
+		add_known_user_conditions(session_id, detected_diseases)
+		# Also persist to disk for backward compatibility with anything that
+		# reads the file (e.g. external scripts).
+		try:
+			os.makedirs("menochat_diseases", exist_ok=True)
+			safe_sid = "".join(c for c in str(session_id) if c.isalnum() or c in "-_") or "unnamed"
+			file_path = os.path.join("menochat_diseases", f"diseases_{safe_sid}.txt")
+			conds = get_known_user_conditions(session_id)
+			with open(file_path, "w", encoding="utf-8") as f:
+				for d in conds:
+					f.write(d + "\n")
+		except Exception as e:
+			print(f">>> diseases file write failed: {repr(e)}")
 
 	return "\nগুরুত্বপূর্ণ তথ্য:\n" + "\n".join(results) if results else ""
 
@@ -1435,12 +1857,13 @@ async def run_chat_turn(
 
 	# --- Three things start in parallel: planner LLM, multi-query LLM, FAISS prefetch ---
 	#
-	# Multi-query no longer depends on planner output (it only uses
-	# user_message + recent_history), so it can run AT THE SAME TIME as the
-	# planner. Add a FAISS search on the raw user message for free recall.
+	# Wall-clock = max(planner_time, multiquery_seed_time, prefetch_time).
 	#
-	# Wall-clock = max(planner_time, multiquery_time, prefetch_time)
-	# instead of planner_time + multiquery_time + prefetch_time.
+	# Note: the multi-query call below is fired WITHOUT intents (planner is
+	# still running). After the planner finishes, if we got multiple intents,
+	# we fire a second, intent-aware multi-query call to fan out per-intent
+	# queries. For single-intent turns (the common case), the first call's
+	# output is used directly — no extra latency.
 	await _fire("planner_start", {"user_message": user_message})
 
 	prefetch_task: Optional[asyncio.Task] = asyncio.create_task(
@@ -1448,7 +1871,7 @@ async def run_chat_turn(
 	)
 	planner_task = asyncio.create_task(run_planner(session_id, user_message))
 	multiquery_task = asyncio.create_task(
-		generate_multi_queries(session_id, user_message, max_queries=4)
+		generate_multi_queries(session_id, user_message, max_queries=4, intents=None)
 	)
 
 	try:
@@ -1475,6 +1898,7 @@ async def run_chat_turn(
 		"risk_level": plan.get("risk_level", ""),
 		"resolved_question": plan.get("resolved_question", ""),
 		"needs_retrieval": bool(plan.get("needs_retrieval", False)),
+		"n_intents": len(plan.get("intents") or []),
 	})
 
 	# Collect multi-query and prefetch results IF we still need retrieval.
@@ -1484,21 +1908,42 @@ async def run_chat_turn(
 		except Exception:
 			prefetch_results = []
 		try:
-			query_variants, mq_parsed = await multiquery_task
+			queries_by_intent, mq_parsed = await multiquery_task
 		except Exception:
-			query_variants, mq_parsed = [], None
+			queries_by_intent, mq_parsed = {}, None
+
+		# If we have multiple intents but the first multi-query call had no
+		# intent awareness, fire a second pass so each intent gets dedicated
+		# queries. Single-intent turns skip this — no extra latency.
+		intents = plan.get("intents") or []
+		if len(intents) > 1:
+			try:
+				queries_by_intent_v2, mq_parsed_v2 = await generate_multi_queries(
+					session_id, user_message, max_queries=4, intents=intents,
+				)
+				# Merge v1 into v2 if v2 missed any intent (defensive).
+				for topic, qs in (queries_by_intent or {}).items():
+					queries_by_intent_v2.setdefault(topic, [])
+					for q in qs:
+						if q not in queries_by_intent_v2[topic]:
+							queries_by_intent_v2[topic].append(q)
+				queries_by_intent, mq_parsed = queries_by_intent_v2, mq_parsed_v2
+			except Exception:
+				# Stick with the v1 (non-intent-aware) queries.
+				pass
 	else:
 		# Cancel both siblings since we won't use them.
 		for t in (prefetch_task, multiquery_task):
 			if t and not t.done():
 				t.cancel()
 		prefetch_results = []
-		query_variants, mq_parsed = [], None
+		queries_by_intent, mq_parsed = {}, None
 
-	# --- Retrieval (uses prefetch + parallel multi-query results, single rerank) ---
+	# --- Retrieval (per-intent FAISS + per-intent rerank, all in parallel) ---
 	await _fire("retrieval_start", {
 		"needs_retrieval": bool(plan.get("needs_retrieval", False)),
 		"route": plan.get("route", ""),
+		"n_intents": len(plan.get("intents") or []),
 	})
 	try:
 		context_blocks = await maybe_run_retrieval_from_plan(
@@ -1506,7 +1951,7 @@ async def run_chat_turn(
 			user_message,
 			session_id,
 			prefetch_results=prefetch_results,
-			query_variants=query_variants,
+			queries_by_intent=queries_by_intent,
 			mq_parsed=mq_parsed,
 		)
 	except Exception as e:
@@ -1593,7 +2038,7 @@ async def run_chat_turn(
 	# --- food2disease comorbidity (still runs after answer is streamed; user is reading) ---
 	await _fire("comorbidity_start", {})
 	try:
-		coms = await food2disease_como(answer)
+		coms = await food2disease_como(answer, session_id=session_id)
 		answer = answer + coms
 	except Exception as e:
 		if debug:
