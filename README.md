@@ -1,6 +1,6 @@
 # MenoChat x Gemma 4
 
-> Bangla voice-first women's health assistant. Gemma 4 E4B brain, custom Whisper-small ASR, fine-tuned Bangladeshi VITS TTS. Delivered as a Telegram bot.
+> Bangla voice-first women's health assistant. Gemma 4 E2B brain, custom Whisper-small ASR, fine-tuned Bangladeshi VITS TTS. Delivered as a Telegram bot.
 
 
 ## About
@@ -14,16 +14,23 @@ Fine-tuned **Whisper-small (240M)** for Bangla women's health speech.
 - Model Checkpoint: https://huggingface.co/Apurba-NSU-RnD-Lab/MenoChat_Whisper_Small
 - Medical Adapter: https://huggingface.co/RafatK/Whisper_good_adapt
 - **Full Model Training** -> Noise augmentation (fans, traffic, TV chatter, white noise etc) and SpecAugment for robustness (MUSAN + Audiomentations + ESC 50) on 3200 hrs of Audio (Common Voice, OpenSLR, MADASR, KathBath, Shrutilipi)
-- **Adapter** -> Noise augmentation + Bangla medical vocab in fine-tune of adapter data
+- **Adapter Training** -> Noise augmentation + Bangla medical vocab in fine-tune of adapter data
 - Flash Attention for fast inference on one GPU
 - Audio path: Telegram OGG/Opus → ffmpeg 16k mono WAV → denoise → Whisper
+
+**Benchmark on Common Voice Test-Set**
+| Model | WER |
+| --- | ---: |
+| Whisper large v3 | 40.35 |
+| Gemma 4 transcription | 30.74 |
+| Whisper-Small-Finetuned (Ours) | **16.54** |
 
 **User scores (n=12, Likert 1–5):** catches medical terms **4.42**, handles noisy speech **4.00**, fast **4.50**. Users tested on real semi-noisy scenarios
 
 ## Gemma 4 (the brain)
 
 Gemma 4 E2B with LoRA fine-tune on 5,187 Bangla women's health conversations.
-The model is wrapped in a 4-stage pipeline (see `llm_utils.py`):
+The model is wrapped in a 4-stage pipeline (see `./Backend_utils/llm_utils.py`):
 
 **Stage 1 (Planner) + Stage 2 (Multi-query) — fired in parallel**
 
