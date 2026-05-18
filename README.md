@@ -102,8 +102,7 @@ TTS system has not been evaluated
 | Precision | bf16, adamw_8bit, gradient checkpointing |
 | Loss masking | `train_on_responses_only` (model loss only) |
 | Best-checkpoint | `load_best_model_at_end=True` on `eval_loss` |
-Train Dataset: 
-Validation Dataset: 
+Train and Validation Dataset: https://huggingface.co/datasets/RafatK/Menochat_train_val
 
 Outputs: LoRA adapter saved locally, GGUF `Q8_0` export for `llama.cpp`.
 
