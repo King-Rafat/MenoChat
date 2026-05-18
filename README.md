@@ -1,11 +1,12 @@
 # MenoChat x Gemma 4
 
-> Bangla voice-first women's health assistant. Gemma 4 E2B brain, custom Whisper-small ASR, fine-tuned Bangladeshi VITS TTS. Delivered as a Telegram bot.
+> Bangla voice-first women's health assistant. Gemma 4 E2B brain, custom Whisper-small ASR, fine-tuned Bangladeshi VITS TTS. Delivered as a Telegram bot. Looking to host on Twilio.
+> Access via Telegram: https://t.me/MenoChatBot
 
 
 ## About
 
-MenoChat is a private, Bangla-language voice assistant for menstrual and menopausal health. You speak in Bangla, it answers in Bangla, out loud. Built to lower both the language barrier and the social shame that keep many of Bangladesh's 170M+ Bangla speakers from getting clear answers about women's health.
+MenoChat is a voice-first Bangla health assistant for menstrual and menopausal concerns. She speaks in Bangla. MenoChat listens, thinks in Bangla, and answers in Bangla, out loud, in a voice she can understand. No typing, no English, no judgement. Gemma 4 E2B is the brain. We chose it for three properties that made the rest of the system possible: open weights, so we could fine-tune freely on a domain no closed model would let us touch; a 2B footprint, so four structured calls still run in four to five seconds on one laptop GPU; the four calls allow more control and better denoising; and native multilingual training, which already understood Bangla before we taught it medical Bangla.
 
 ## ASR
 
