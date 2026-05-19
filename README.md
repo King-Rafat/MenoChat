@@ -146,8 +146,10 @@ Structured evaluation through 10 clinicians and 2 normal users. Each user comple
 | 12 | - | 4.17 | 4.67 | 3.33 | 3.67 | 1.50 | 4.83 | 3.50 | 40.0 |
 | | **Group mean** | **4.19** | **4.14** | **3.65** | **4.08** | **3.12** | **4.47** | **3.99** | **65.6** |
 
-The 9.8 point gap between the standard and positive-keyed SUS suggests reverse-item miskeying, a known artifact when SUS is administered to participants less familiar with bidirectional survey scales (Sauro and Lewis, 2011). We interpret 75.4 as the more reliable usability estimate for this population.
-**Headline:** safe **4.47**, trust **4.33**, recommend **4.83**, SUS **65.6**. Positive SUS: 75.4. ASR is the strongest leg, TTS is the weakest. Voice clarity scores stay low across all 6 tasks regardless of task type, confirming the bottleneck is synthesis, not reasoning.
+The 9.8 point gap between the standard and positive-keyed SUS suggests reverse-item miskeying, a known artifact when SUS is administered to participants less familiar with bidirectional survey scales (Sauro and Lewis, 2011). 
+We interpret **75.4** as the more reliable usability estimate for this population.
+
+**Headline:** safe **4.47**, trust **4.33**, recommend **4.83**, SUS **65.6**. Positive SUS: **75.4**. ASR is the strongest leg, TTS is the weakest. Voice clarity scores stay low across all 6 tasks regardless of task type, confirming the bottleneck is synthesis, not reasoning.
 
 ## Quick Start
 
