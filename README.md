@@ -12,7 +12,7 @@ MenoChat is a voice-first Bangla health assistant for menstrual and menopausal c
 
 Gemma 4 E2B with LoRA fine-tune on 5,187 Bangla women's health conversations.
 The model is wrapped in a 4-stage pipeline (see `./Backend_utils/llm_utils.py`):
-
+Retrieval is from a verified database consisting of websites and papers verified by doctors: https://drive.google.com/drive/folders/1txqITO1NRjx8-6yzozMYEs9Ulq10tvak?usp=sharing 
 **Stage 1 (Planner) + Stage 2 (Multi-query) — fired in parallel**
 
 | Planner output | Allowed values |
