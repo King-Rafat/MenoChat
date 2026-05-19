@@ -91,6 +91,7 @@ Fine-tuned **Whisper-small (240M)** for Bangla women's health speech.
 Custom **Bangladeshi VITS**, fine-tuned on Bangladeshi voice data. One-shot (non-autoregressive) for low-latency synthesis. Output is re-encoded to OGG/Opus so Telegram plays it as a real voice note.
 
 TTS system has not been evaluated
+TTS Checkpoint: https://huggingface.co/Apurba-NSU-RnD-Lab/MenoChat_ViTs_Bangla_TTS
 
 ## Training Script
 
